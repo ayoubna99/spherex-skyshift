@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f17">
   <title>SkyShift — what moved through your patch of sky?</title>
   <meta name="description" content="Explore NASA SPHEREx images over time: moving stars, variable stars, and the satellites crossing the data, with their temperatures.">
   <link rel="stylesheet" href="style.css">
@@ -52,8 +53,8 @@
     </div>
     <div class="player">
       <button id="playBtn">▶ Play</button>
-      <button id="prevBtn">◀</button>
-      <button id="nextBtn">▶</button>
+      <button id="prevBtn" aria-label="Previous frame">◀</button>
+      <button id="nextBtn" aria-label="Next frame">▶</button>
       <label>Speed <input id="speed" type="range" min="200" max="2000" value="900" step="100"></label>
       <span id="frameInfo" class="info"></span>
     </div>
