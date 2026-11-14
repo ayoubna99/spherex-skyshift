@@ -341,7 +341,7 @@ function drawHist(cv, xs, o) {
     const ec = new Array(o.bins).fill(0);
     o.extra.forEach((x) => { const i = Math.floor((x - o.xmin) / (o.xmax - o.xmin) * o.bins); if (i >= 0 && i < o.bins) ec[i]++; });
     ec.forEach((c, i) => { if (!c) return; const y0 = Y(counts[i]), y1 = Y(counts[i] + c); g.strokeStyle = o.color; g.lineWidth = 2; g.strokeRect(L + i * bw + 2, y1, bw - 4, y0 - y1); g.fillStyle = o.color; g.fillText("→", L + i * bw + bw / 2 - 6, y1 - 6); });
-    g.fillStyle = MUTED; g.fillText("hollow → " + o.extraLabel, L + 10, H - B - 30);
+    g.fillStyle = MUTED; g.fillText("hollow → " + o.extraLabel, W - R - 420, T + 40);
   }
   g.strokeStyle = "#2a3448"; g.beginPath(); g.moveTo(L, H - B); g.lineTo(W - R, H - B); g.moveTo(L, T); g.lineTo(L, H - B); g.stroke();
   g.fillStyle = MUTED;

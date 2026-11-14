@@ -35,6 +35,15 @@ satellites polluting the data — and, for the satellites, how hot they are.
    side-on). COSMOS 1980: ~32 m² (18–58) against a 4.5 m × 1.4 m bus with a 22.7 m solar-panel span.
    Order-of-magnitude agreement with no albedo assumption; a factor-of-few check, not a precision size.
 
+6. **Pilot census.** `scripts/run_census.py` draws a seeded random sample from the 2,182 trails NASA Ames
+   identified by eye (Borlaff et al. 2026, Zenodo 10.5281/zenodo.17957748), fetches the DR1 reprocessing of
+   each exposure from IRSA and runs the same two-camera photometry with no hand-picking;
+   `scripts/build_census.py` aggregates into `frontend/static/census.json` (the site draws the
+   distributions). Rules: a trail counts as measured only with a >3σ long-camera detection; the long/short
+   ratio is a lower limit when the short camera sees nothing; temperatures are kept only when the bootstrap
+   range is under 100 K. Results so far are in `census/results.jsonl`. To extend: `python scripts/run_census.py 7200`
+   (seconds of budget), then `python scripts/build_census.py`.
+
 ### Showcase results (near Barnard's Star, August 2026)
 
 | Exposure | Object | Distance from SPHEREx | Temperature | Long/short ratio (stars) |
