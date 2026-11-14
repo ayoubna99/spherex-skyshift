@@ -421,7 +421,7 @@ function initAladin() {
   if (!window.A || S.aladinStarted) return;
   S.aladinStarted = true;
   A.init.then(() => {
-    S.aladin = A.aladin("#aladin", { survey: HIPS_WISE, fov: 0.5, showReticle: true, showLayersControl: false, showGotoControl: false, showFullscreenControl: false, showFrame: false, showCooGrid: false });
+    S.aladin = A.aladin("#aladin", { survey: HIPS_WISE, fov: 0.5, log: false, showReticle: true, showLayersControl: false, showGotoControl: false, showFullscreenControl: false, showFrame: false, showCooGrid: false });
     S.overlay = A.graphicOverlay({ color: HOT, lineWidth: 2 });
     S.aladin.addOverlay(S.overlay);
     if (S.pendingBase) setBase(S.pendingBase);
