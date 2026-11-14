@@ -61,24 +61,24 @@ class Exposure:
     def __init__(self, path):
         with fits.open(path) as h:
             hdr = h["IMAGE"].header
-            self.img = h["IMAGE"].data.astype(float)
+            self.img = h["IMAGE"].data.astype(np.float32)
             if "ZODI" in h:
                 self.img -= h["ZODI"].data
-            self.flags = h["FLAGS"].data.astype(np.int64)
+            self.flags = h["FLAGS"].data.astype(np.int64)  # bit 29 needs > int16; kept simple
             self.wcs = WCS(hdr)
             self.wave = WCS(hdr, fobj=h, key="W")
             self.date = hdr.get("DATE-OBS")
             self.det = hdr.get("DETECTOR")
             self.eph = {k: hdr.get(k) for k in identify.EPH_KEYS}
         self.ny, self.nx = self.img.shape
-        self.Y, self.X = np.mgrid[0:self.ny, 0:self.nx]
+        self.Y, self.X = np.mgrid[0:self.ny, 0:self.nx].astype(np.float32)
         self._resid = None
 
     @property
     def resid(self):
         """Image minus a smooth background (block medians, fast), computed once."""
         if self._resid is None:
-            a = np.nan_to_num(self.img)
+            a = np.nan_to_num(self.img).astype(np.float32)
             b = 24
             ny, nx = self.ny // b * b, self.nx // b * b
             blocks = np.median(a[:ny, :nx].reshape(ny // b, b, nx // b, b), axis=(1, 3))

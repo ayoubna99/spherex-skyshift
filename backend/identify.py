@@ -32,6 +32,7 @@ def tle_path():
 
 
 _JAN1 = {}
+CHUNK = 1500
 
 
 @lru_cache(maxsize=2)
@@ -106,48 +107,45 @@ def identify(eph, line_sky, tol_deg=0.1, max_angle_deg=1.0, n_t=921, top=3):
 
     jd = ts + 2400000.5
     jd_i, fr = np.floor(jd), jd - np.floor(jd)
-    err, r, _ = SatrecArray(sats).sgp4(jd_i, fr)              # (n_sat, n_t, 3) TEME km
     R = _teme_to_gcrs(eph["MJD-AVG"])
-    r = r @ R.T
-    rel = r - sc[None, :, :]
-    dist = np.linalg.norm(rel, axis=2)
-    u = rel / dist[..., None]
-
     a, b = _unit(*line_sky[0]), _unit(*line_sky[1])
     n = np.cross(a, b)
     n /= np.linalg.norm(n)
-    off = np.degrees(np.arcsin(np.clip(u @ n, -1, 1)))          # offset from great circle
-    # position along the arc: inside if between a and b
-    along_a = u @ np.cross(n, a)                                # >0 past a towards b
-    along_b = u @ np.cross(b, n)                                # >0 before b
-    inside = (along_a > -0.002) & (along_b > -0.002) & ((u @ (a + b)) > 0)
-    good = (err == 0) & (dist > 50)
-
     c = (a + b) / np.linalg.norm(a + b)
     ldir = np.cross(n, c)                                       # streak direction at its centre
     arc_len = np.degrees(np.arccos(np.clip(a @ b, -1, 1)))
+    na, nb = np.cross(n, a), np.cross(b, n)
 
     out = []
-    for i in range(len(sats)):
-        m = inside[i] & good[i]
-        if m.sum() < 2 or np.abs(off[i][m]).min() > tol_deg:
-            continue
-        k = np.flatnonzero(m)
-        du = u[i][k[-1]] - u[i][k[0]]
-        span = np.degrees(np.linalg.norm(du))
-        if span < 0.5 * arc_len:                                # must run along most of the streak
-            continue
-        angle = np.degrees(np.arccos(min(1.0, abs(du @ ldir) / np.linalg.norm(du))))
-        if angle > max_angle_deg:                               # must move the same way as the streak
-            continue
-        out.append({
-            "name": names[i], "norad": ids[i],
-            "offset_deg": round(float(np.median(np.abs(off[i][m]))), 3),
-            "angle_deg": round(float(angle), 2),
-            "distance_km": round(float(np.median(dist[i][m]))),
-            "altitude_km": round(float(np.median(np.linalg.norm(r[i][m], axis=1))) - 6371),
-            "crossing_s": round(float((ts[k[-1]] - ts[k[0]]) * 86400), 1),
-            "time_utc": Time(float(np.median(ts[k])), format="mjd", scale="utc").isot[:19],
-        })
+    for c0 in range(0, len(sats), CHUNK):                       # chunks keep memory under ~300 MB
+        err, r, _ = SatrecArray(sats[c0:c0 + CHUNK]).sgp4(jd_i, fr)   # (n, n_t, 3) TEME km
+        r = r @ R.T
+        rel = r - sc[None, :, :]
+        dist = np.linalg.norm(rel, axis=2)
+        u = rel / dist[..., None]
+        off = np.degrees(np.arcsin(np.clip(u @ n, -1, 1)))      # offset from the streak's great circle
+        inside = ((u @ na) > -0.002) & ((u @ nb) > -0.002) & ((u @ c) > 0) & (err == 0) & (dist > 50)
+        cand = np.flatnonzero((inside.sum(1) >= 2) & (np.where(inside, np.abs(off), 99).min(1) <= tol_deg))
+        for j in cand:
+            i = c0 + j
+            m = inside[j]
+            k = np.flatnonzero(m)
+            du = u[j][k[-1]] - u[j][k[0]]
+            span = np.degrees(np.linalg.norm(du))
+            if span < 0.5 * arc_len:                            # must run along most of the streak
+                continue
+            angle = np.degrees(np.arccos(min(1.0, abs(du @ ldir) / np.linalg.norm(du))))
+            if angle > max_angle_deg:                           # must move the same way as the streak
+                continue
+            out.append({
+                "name": names[i], "norad": ids[i],
+                "offset_deg": round(float(np.median(np.abs(off[j][m]))), 3),
+                "angle_deg": round(float(angle), 2),
+                "distance_km": round(float(np.median(dist[j][m]))),
+                "altitude_km": round(float(np.median(np.linalg.norm(r[j][m], axis=1))) - 6371),
+                "crossing_s": round(float((ts[k[-1]] - ts[k[0]]) * 86400), 1),
+                "time_utc": Time(float(np.median(ts[k])), format="mjd", scale="utc").isot[:19],
+            })
+        del err, r, rel, dist, u, off, inside
     out.sort(key=lambda c: c["offset_deg"] + 0.05 * c["angle_deg"])
     return out[:top]

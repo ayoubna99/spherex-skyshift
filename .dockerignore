@@ -1,0 +1,6 @@
+backend/cache
+backend/data
+frontend
+mock
+.git
+*.fits
