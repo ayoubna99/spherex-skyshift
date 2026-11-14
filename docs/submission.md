@@ -65,11 +65,7 @@ fast even if the archive is busy.
 
 ## Use of artificial intelligence
 
-We used an AI assistant (Claude, by Anthropic) as a coding and research partner: brainstorming,
-reading documentation and papers, writing and debugging code, and drafting text. Every number on the
-site was computed from real SPHEREx images and checked by the team against controls (stars in the
-same images; two independent timing checks for the satellite matches). No AI-generated images, video
-or voice are used; every image shown is SPHEREx data.
+We used AI tools to help with coding and research. No image on the site is AI-generated; every image is SPHEREx data.
 
 ## NASA data
 

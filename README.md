@@ -129,10 +129,7 @@ showcase are pre-rendered in `frontend/static/` and need no backend.
 
 ## Use of AI
 
-We used an AI assistant (Claude, Anthropic) as a coding and research partner: brainstorming,
-reading documentation and papers, writing and debugging code, and drafting text. All results were
-run on real SPHEREx data and checked by the team (control stars, two independent timing checks for
-the satellite matches). No AI-generated images are used; every image on the site is SPHEREx data.
+We used AI tools to help with coding and research. No image on the site is AI-generated; every image is SPHEREx data.
 
 ## Team
 
