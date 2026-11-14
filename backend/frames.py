@@ -140,7 +140,7 @@ def save_diff(d, lim, name):
 
 
 def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name=None):
-    key = hashlib.md5(f"v4|{ra:.5f}|{dec:.5f}|{size_deg:.4f}|{per_epoch_det}|{dets}|{spherex.COLLECTIONS}"
+    key = hashlib.md5(f"v5|{ra:.5f}|{dec:.5f}|{size_deg:.4f}|{per_epoch_det}|{dets}|{spherex.COLLECTIONS}"
                       .encode()).hexdigest()[:12]
     cached = spherex.CACHE / f"result_{key}.json"
     if cached.exists():
@@ -208,7 +208,7 @@ def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name
     for d in dets:
         eps = sorted(ep for (ep, dd) in stack_arr if dd == d)
         for a, b in zip(eps, eps[1:]):
-            diff = stack_arr[(b, d)] - stack_arr[(a, d)]
+            diff = _fill_holes(stack_arr[(b, d)]) - _fill_holes(stack_arr[(a, d)])
             lim = float(np.nanpercentile(np.abs(diff), 99.5)) or 1.0
             diffs.append({"detector": d, "from_epoch": a, "to_epoch": b,
                           "png": save_diff(diff, lim, f"{key}_diff_e{a}e{b}_d{d}.png")})
