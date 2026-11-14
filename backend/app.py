@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from astropy.time import Time
 
-from . import frames, spherex
+from . import frames, spherex, streaks
 from .targets import TARGETS, position_at
 
 app = FastAPI(title="SkyShift API", version="0.1")
@@ -49,3 +49,38 @@ def get_frames(
         return frames.build(ra, dec, size_deg=size_deg, per_epoch_det=per_epoch, name=name)
     except RuntimeError as e:
         raise HTTPException(503, str(e)) from e
+
+
+IRSA_PREFIX = "https://irsa.ipac.caltech.edu/ibe/data/spherex/"
+
+# Exposures where we found and validated satellite streaks (near Barnard's Star, Aug 2026)
+SHOWCASE = [
+    {"url": IRSA_PREFIX + "qr3/level2/2026W34_1A/l2b-v27-2026-243/3/level2_2026W34_1A_0238_2D3_spx_l2b-v27-2026-243.fits", "det": 3},
+    {"url": IRSA_PREFIX + "qr3/level2/2026W34_1A/l2b-v27-2026-243/6/level2_2026W34_1A_0431_2D6_spx_l2b-v27-2026-243.fits", "det": 6},
+]
+
+
+@app.get("/api/streaks")
+def get_streaks(
+    url: str = Query(..., description="IRSA URL of one SPHEREx exposure (from /api/frames)"),
+    det: int = Query(..., ge=1, le=6),
+):
+    """Find every satellite streak in this exposure and measure it in both cameras (30-90 s first time)."""
+    if not url.startswith(IRSA_PREFIX) or not url.endswith(".fits"):
+        raise HTTPException(400, "url must be a SPHEREx image URL from IRSA")
+    try:
+        return streaks.analyse(url, det)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from e
+
+
+@app.get("/api/showcase")
+def showcase():
+    """Pre-validated satellite streaks for the demo."""
+    out = []
+    for s in SHOWCASE:
+        try:
+            out.append(streaks.analyse(s["url"], s["det"]))
+        except RuntimeError:
+            continue
+    return out

@@ -140,7 +140,7 @@ def save_diff(d, lim, name):
 
 
 def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name=None):
-    key = hashlib.md5(f"v3|{ra:.5f}|{dec:.5f}|{size_deg:.4f}|{per_epoch_det}|{dets}|{spherex.COLLECTIONS}"
+    key = hashlib.md5(f"v4|{ra:.5f}|{dec:.5f}|{size_deg:.4f}|{per_epoch_det}|{dets}|{spherex.COLLECTIONS}"
                       .encode()).hexdigest()[:12]
     cached = spherex.CACHE / f"result_{key}.json"
     if cached.exists():
@@ -167,7 +167,7 @@ def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name
         arrays[fid] = a
         t = Time(r["mjd"], format="mjd")
         frames.append({
-            "id": fid, "obs_id": r["obs_id"], "collection": r["collection"],
+            "id": fid, "obs_id": r["obs_id"], "collection": r["collection"], "url": r["url"],
             "detector": r["detector"], "band": DET_BANDS[r["detector"]],
             "epoch": r["epoch"], "date": t.isot[:19] + "Z", "mjd": round(r["mjd"], 5),
             "wavelength_um": round(lam, 3) if lam else None,
