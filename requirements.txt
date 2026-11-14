@@ -7,3 +7,4 @@ reproject>=0.13
 pillow>=10.0
 sgp4>=2.23
 skyfield>=1.48
+a2wsgi>=1.10
