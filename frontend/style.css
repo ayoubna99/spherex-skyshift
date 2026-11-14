@@ -154,6 +154,8 @@ input, select { background: var(--panel); color: var(--ink); border: 1px solid v
 .card .temp span { font-family: var(--display); font-size: 40px; font-weight: 800; color: var(--hot); line-height: 1; }
 .card .temp small { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
 .card .satline { margin-bottom: 8px; }
+.card .area { margin: 6px 0 10px; color: #d5dce8; }
+.card .area b { color: var(--hot); font-family: var(--display); font-size: 1.2em; }
 .card .satline b { font-size: 1.15em; }
 .card .satline a { font-size: 13px; margin-left: 6px; }
 .card .full { width: 100%; border-radius: 8px; display: block; margin: 6px 0 10px; }
@@ -168,7 +170,7 @@ input, select { background: var(--panel); color: var(--ink); border: 1px solid v
 
 /* ---------- method */
 .method { max-width: var(--wrap); margin: 0 auto; padding: 72px 32px 40px; }
-.method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 40px; margin: 28px 0 40px; }
+.method-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 26px 40px; margin: 28px 0 40px; }
 .method-grid h3 { margin-bottom: 8px; }
 .method-grid p { color: #c8d1e0; max-width: 60ch; }
 .sources { border-top: 1px solid var(--line); padding-top: 24px; color: #c8d1e0; max-width: 90ch; }

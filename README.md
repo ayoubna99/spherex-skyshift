@@ -28,6 +28,13 @@ satellites polluting the data — and, for the satellites, how hot they are.
    object whose apparent track lies on the streak and moves the same way. That gives the name and the
    distance.
 
+5. **Roughly how big.** Thermal flux = emissivity × area × Planck(T) / distance². With the fitted
+   temperature and the matched distance, the streak brightness (corrected for the crossing rate and the
+   exposure length from the header, emissivity assumed 0.9) gives a thermal cross-section. H-1 stage:
+   ~90 m² (55–141 over the temperature range) against a published 10.32 m × 2.49 m cylinder (~26 m²
+   side-on). COSMOS 1980: ~32 m² (18–58) against a 4.5 m × 1.4 m bus with a 22.7 m solar-panel span.
+   Order-of-magnitude agreement with no albedo assumption; a factor-of-few check, not a precision size.
+
 ### Showcase results (near Barnard's Star, August 2026)
 
 | Exposure | Object | Distance from SPHEREx | Temperature | Long/short ratio (stars) |
@@ -44,8 +51,8 @@ exposure.
 
 - The ratio depends on the measurement method by ±30% or more; the temperature is much more stable.
   We show ratios as indicative and temperatures with ranges.
-- One temperature is an average over the visible surface. Size cannot be separated from
-  emissivity (brightness ∝ area × emissivity).
+- One temperature is an average over the visible surface. The cross-section assumes an emissivity
+  (0.9) and inherits the wing-calibration systematic: good to a factor of 2–3, no better.
 - Naming needs an orbit file from Space-Track for the dates of the exposure. Objects not in the
   public catalogue cannot be named.
 - Temperature needs the long camera (D5/D6, 3.8–5 µm) to see the streak.
@@ -106,6 +113,8 @@ showcase are pre-rendered in `frontend/static/` and need no backend.
   Explanatory Supplement (IRSA).
 - Borlaff et al. (2026), arXiv:2605.27501 — satellite trails in SPHEREx exposures and a thermal
   model predicting ~280 K satellites. Our measured temperatures are consistent with it.
+- Object dimensions for the size check: Encyclopedia Astronautica (H-1 / LE-5 second stage, 10.32 m ×
+  2.49 m); KeepTrack.space catalogue entries for NORAD 16910 and 19649 (Tselina-2: 4.5 m × 1.4 m, 22.7 m span).
 - Prior infrared photometry of satellites: WISE geostationary-satellite streak studies; AMOS
   visible + thermal-IR satellite characterisation.
 

@@ -445,6 +445,8 @@ def analyse(url, det):
             "png_long": crop_png(long_, res["long"]["L"], f"{sid}_long.png"),
             "png_full": full_png(short, long_, f"{sid}_full.png"),
             "time_half_hint": None if frac_first is None else ("first" if frac_first > 0.5 else "second"),
+            "exposure_s": round((short.eph["MJD-END"] - short.eph["MJD-BEG"]) * 86400, 1)
+            if short.eph.get("MJD-END") and short.eph.get("MJD-BEG") else None,
             **_name_it(short.eph, [[float(ra[0]), float(dec[0])], [float(ra[1]), float(dec[1])]]),
         })
     out = {"key": key, "date": short.date, "mjd": Time(short.date).mjd if short.date else None,

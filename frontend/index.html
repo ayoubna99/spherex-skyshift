@@ -28,10 +28,10 @@
   <img class="hero-sky" src="static/img/d1b669467802_s0_full.png" alt="A full SPHEREx exposure, 3.5 degrees of sky, crossed by one satellite streak">
   <div class="hero-text">
     <p class="kicker">NASA Space Apps 2026 · Planet X and SPHEREx</p>
-    <h1>Three in four SPHEREx images are crossed by a satellite. NASA deletes those pixels.<br><em>We took the satellite's temperature — and found its name.</em></h1>
+    <h1>Three in four SPHEREx images are crossed by a satellite. NASA deletes those pixels.<br><em>We took the satellite's temperature, found its name — and its size.</em></h1>
     <p class="lede">SkyShift lets anyone replay any patch of sky from NASA's SPHEREx survey — stars that move, stars that flicker — and turns the satellite streaks everyone else deletes into a measurement.</p>
     <div class="cta">
-      <a class="btn primary" href="#reveal">Watch the reveal — 40 seconds</a>
+      <a class="btn primary" href="#reveal">Watch the reveal — 50 seconds</a>
       <a class="btn" href="#explore">Explore the sky</a>
     </div>
   </div>
@@ -69,6 +69,11 @@
         <canvas id="specCanvas" width="900" height="820"></canvas>
         <figcaption>Brightness of the streak's edges, both cameras. Dashed: what sunlight alone would give. Amber: a body at <span id="specT">—</span>.</figcaption>
       </figure>
+      <!-- scene 5: size -->
+      <figure class="scene" data-scene="4">
+        <canvas id="sizeCanvas" width="900" height="820"></canvas>
+        <figcaption>Amber: the area that would radiate what we measured, at the fitted temperature and catalogue distance. Blue: the object's published outline, same scale.</figcaption>
+      </figure>
       <!-- scene 4: geometry -->
       <figure class="scene" data-scene="3">
         <canvas id="geoCanvas" width="900" height="820"></canvas>
@@ -78,27 +83,34 @@
 
     <div class="scene-copy">
       <div class="copy" data-scene="0">
-        <p class="step">Step 1 of 4</p>
+        <p class="step">Step 1 of 5</p>
         <h3>The pixels nobody wants</h3>
         <p>SPHEREx photographs the whole sky every six months in 102 infrared colours. In <strong>73% of its exposures</strong> a satellite crosses the field. The pipeline marks the streak with a flag and scientists mask it out. Those pixels are, officially, waste.</p>
       </div>
       <div class="copy" data-scene="1">
-        <p class="step">Step 2 of 4</p>
+        <p class="step">Step 2 of 5</p>
         <h3>Two cameras, one instant</h3>
         <p>Behind the telescope a dichroic mirror sends short wavelengths to one camera and long wavelengths to another. Every streak is therefore recorded twice, at the same moment. In reflected sunlight it is faint. In heat it blazes.</p>
         <p class="numbers"><span><b>0.25×</b> the 1,068 stars in the same image, long camera over short</span><span><b>58×</b> the streak</span></p>
       </div>
       <div class="copy" data-scene="2">
-        <p class="step">Step 3 of 4</p>
+        <p class="step">Step 3 of 5</p>
         <h3>It glows with its own heat</h3>
         <p>Light leaks out either side of the masked core. We measure it, calibrate it against the stars, and fit the long-wavelength slope. The object is not just reflecting the Sun. It is warm.</p>
         <p class="bignum"><span id="bigT">—</span><small id="bigTsub"></small></p>
       </div>
       <div class="copy" data-scene="3">
-        <p class="step">Step 4 of 4</p>
+        <p class="step">Step 4 of 5</p>
         <h3>And it has a name</h3>
         <p>The image header records where SPHEREx was at the start, middle and end of the exposure. We propagated all 31,500 catalogued objects across those 115 seconds. Exactly one track lies on the streak and moves the same way.</p>
         <p class="satline"><b>H-1 rocket body (MABES)</b> — a Japanese upper stage launched in 1986. NORAD 16910. 987 km from the telescope, 1,508 km above the Earth. It crossed at 04:34:14 UTC, in 4.4 seconds. SPHEREx's own “first half of the exposure” flag agrees.</p>
+      </div>
+      <div class="copy" data-scene="4">
+        <p class="step">Step 5 of 5</p>
+        <h3>And roughly how big it is</h3>
+        <p>Optical tracking has to guess how reflective a piece of debris is to turn brightness into size. We don't: heat, temperature and distance fix the radiating area directly. The streak's brightness, corrected for how fast it crossed, is <span id="sizeFlux">—</span>.</p>
+        <p class="bignum"><span id="bigA">—</span><small id="bigAsub"></small></p>
+        <p class="satline"><span id="sizeKnown"></span> Same order of magnitude. This is a factor-of-few check, not a precision measurement: the wing calibration and the assumed emissivity set the systematic, and a tumbling body shows a different face each second.</p>
       </div>
       <div class="scene-controls">
         <button id="sceneBack" class="btn small" aria-label="Previous step">←</button>
@@ -116,6 +128,7 @@
       <div>
         <p class="satline"><b>COSMOS 1980</b> — Soviet satellite, 1988. NORAD 19649.</p>
         <p class="numbers"><span><b>294 K</b> (278–311)</span><span><b>226 km</b> from SPHEREx</span><span><b>28×</b> stars: 0.24×</span><span><b>0.8 s</b> to cross</span></p>
+        <p class="small" id="secondArea"></p>
         <p class="small">Both temperatures sit where NASA Ames's thermal model of satellites in SPHEREx data puts them, around 280 K (Borlaff et al. 2026). Nobody had measured one from this telescope before.</p>
       </div>
     </div>
@@ -218,8 +231,12 @@
       <p>SPHEREx's position at the start, middle and end of each exposure is in the file header. We propagate the public satellite catalogue (Space-Track elements, SGP4) across the exposure and keep an object only if its apparent track lies on the streak and runs the same way. Both showcase streaks matched exactly one object. Orbit data for the exposure date is required and cannot be redistributed, so live naming depends on the server's orbit file.</p>
     </div>
     <div>
+      <h3>Size</h3>
+      <p>Thermal flux is emissivity × area × Planck(T) / distance². With the temperature from the fit and the distance from the orbit match, the streak's brightness (corrected for the crossing rate, using the exposure length from the header) gives a thermal cross-section, assuming an emissivity of 0.9. Published dimensions for the comparison: H-1 second stage 10.32 m × 2.49 m (Encyclopedia Astronautica, LE-5 stage); Tselina-2 bus 4.5 m × 1.4 m, 22.7 m span (KeepTrack catalogue). Agreement is within a factor of a few: an order-of-magnitude size with no albedo assumption, which optical tracking cannot give.</p>
+    </div>
+    <div>
       <h3>Limits</h3>
-      <p>One temperature is an average over the visible surface; size and emissivity cannot be separated. Naming only works for catalogued objects. The temperature needs the long-wavelength cameras (D5/D6) to see the streak. Each streak crosses one detector pair, so a single satellite yields two of the six bands, not a full spectrum.</p>
+      <p>One temperature is an average over the visible surface; the area is only as good as the assumed emissivity and the wing calibration (factor 2–3). Naming only works for catalogued objects. The temperature needs the long-wavelength cameras (D5/D6) to see the streak. Each streak crosses one detector pair, so a single satellite yields two of the six bands, not a full spectrum.</p>
     </div>
   </div>
   <div class="sources">

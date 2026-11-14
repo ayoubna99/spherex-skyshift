@@ -42,14 +42,40 @@ const imgURL = (base, png) => `${base || API}/${png}`;
 
 // ================================================================ THE REVEAL
 const R = { scene: 0, timer: null, playing: !REDUCED, streak: null, specAnim: null, geoAnim: null };
-const SCENE_MS = [7000, 11000, 11000, 12000];
+const SCENE_MS = [7000, 11000, 11000, 12000, 12000];
 
 function bnu(l, T) { return Math.pow(l, -3) / (Math.exp(14387.77 / (l * T)) - 1); }
+
+// ---- thermal cross-section: brightness + temperature + distance -> emitting area (emissivity assumed)
+// Streak brightness is the time-averaged, across-trail-integrated surface brightness (MJy/sr per pixel).
+// A point source of flux density F crossing at angular rate w deposits F * (px/w) per pixel column over an
+// exposure of length T, so F = B * px * w * T. Then F = eps * Planck(T_sat) * A / d^2.
+const EPS = 0.9;                     // assumed emissivity of spacecraft surfaces (paint, MLI, oxidised metal)
+const PX_RAD = 6.15 / 206265;
+function planckMJysr(um, T) {        // Planck B_nu in MJy/sr
+  const h = 6.62607e-34, c = 2.99792e8, k = 1.380649e-23, nu = c / (um * 1e-6);
+  return 2 * h * nu ** 3 / c ** 2 / (Math.exp(h * nu / (k * T)) - 1) / 1e-26 / 1e6;
+}
+function emittingArea(c) {
+  const sat = c.satellite;
+  if (!sat || !c.temp_k || !c.flux_long || !sat.crossing_s || !sat.distance_km) return null;
+  const w = (c.length_deg * Math.PI / 180) / sat.crossing_s, T = c.exposure_s || 115;
+  const F = c.flux_long * PX_RAD * w * T;                             // MJy
+  const area = (Tk) => F / (EPS * planckMJysr(c.wavelength_long_um, Tk)) * (sat.distance_km * 1e3) ** 2;
+  return { m2: area(c.temp_k), lo: area(c.temp_range_k[1]), hi: area(c.temp_range_k[0]), fluxJy: F * 1e6 };
+}
+// Published dimensions of the showcase objects, for the comparison (sources in the Method section)
+const KNOWN_SIZE = {
+  "16910": "An H-1 second stage is a 10.3 m × 2.5 m cylinder: about 26 m² side-on, 5 m² end-on.",
+  "19649": "A Tselina-2 satellite is a 4.5 m × 1.4 m body with a 22.7 m solar-panel span: tens of m² depending on the angle.",
+};
+const fmtArea = (a) => `${Math.round(a.m2)} m²`;
+const fmtAreaRange = (a) => `${Math.round(a.lo)}–${Math.round(a.hi)} m² over the temperature range; about 1.8× more if the surface is a poor emitter`;
 
 async function initReveal() {
   // scene navigation
   const nav = $("sceneNav");
-  ["Exposure", "Two cameras", "Temperature", "Name"].forEach((t, i) => {
+  ["Exposure", "Two cameras", "Temperature", "Name", "Size"].forEach((t, i) => {
     const b = document.createElement("button"); b.textContent = t; b.setAttribute("role", "tab");
     b.onclick = () => { gotoScene(i); pauseReveal(); };
     nav.appendChild(b);
@@ -64,11 +90,23 @@ async function initReveal() {
   // showcase data for the spectrum and geometry
   try {
     const sc = await api("/api/showcase");
+    R.showcase = sc;
     R.streak = sc[0].streaks[0];
   } catch (e) { /* the reveal still works, the spectrum stays empty */ }
   if (R.streak) {
     $("specT").textContent = `${R.streak.temp_k} K`;
     $("bigTsub").textContent = `${R.streak.temp_range_k[0]}–${R.streak.temp_range_k[1]} K · about ${R.streak.temp_k - 273} °C`;
+    const a = emittingArea(R.streak);
+    if (a) {
+      $("bigA").textContent = fmtArea(a);
+      $("bigAsub").textContent = fmtAreaRange(a);
+      $("sizeKnown").textContent = KNOWN_SIZE[R.streak.satellite.norad] || "";
+      $("sizeFlux").textContent = `${Math.round(a.fluxJy).toLocaleString()} Jy`;
+    }
+    try {
+      const b = R.showcase[1]?.streaks[0], ab = b && emittingArea(b);
+      if (ab) $("secondArea").innerHTML = `<b>${fmtArea(ab)}</b> thermal cross-section (${Math.round(ab.lo)}–${Math.round(ab.hi)})`;
+    } catch (e) { /* optional */ }
   }
   gotoScene(0);
   // only auto-play while the reveal is on screen
@@ -81,21 +119,22 @@ async function initReveal() {
 }
 function schedule() {
   clearTimeout(R.timer);
-  R.timer = setTimeout(() => { R.timer = null; gotoScene((R.scene + 1) % 4); if (R.playing) schedule(); }, SCENE_MS[R.scene]);
+  R.timer = setTimeout(() => { R.timer = null; gotoScene((R.scene + 1) % 5); if (R.playing) schedule(); }, SCENE_MS[R.scene]);
 }
 function pauseReveal() { R.playing = false; clearTimeout(R.timer); R.timer = null; $("scenePlay").textContent = "Auto-play"; $("reveal").classList.remove("auto"); }
 function resumeReveal() { R.playing = true; $("scenePlay").textContent = "Pause"; $("reveal").classList.add("auto"); schedule(); }
 function gotoScene(i) {
-  R.scene = (i + 4) % 4;
+  R.scene = (i + 5) % 5;
   document.querySelectorAll("#stageBox .scene, .scene-copy .copy").forEach((el) => el.classList.toggle("on", +el.dataset.scene === R.scene));
   [...$("sceneNav").children].forEach((b, k) => { b.classList.toggle("on", k === R.scene); b.setAttribute("aria-selected", k === R.scene); });
   $("reveal").style.setProperty("--scene-ms", SCENE_MS[R.scene] + "ms");
   $("reveal").classList.toggle("auto", R.playing);
   // restart the bar animation
   const nav = $("sceneNav"); nav.classList.remove("tick"); void nav.offsetWidth; nav.classList.add("tick");
-  $("sceneNext").textContent = R.scene === 3 ? "Start again" : "Next";
+  $("sceneNext").textContent = R.scene === 4 ? "Start again" : "Next";
   if (R.scene === 2) animateSpectrum();
   if (R.scene === 3) animateGeometry();
+  if (R.scene === 4) drawSize($("sizeCanvas"), R.streak);
   if (R.playing && !R.timer) schedule();
 }
 
@@ -212,6 +251,39 @@ function drawGeometry(cv, sat, p = 1) {
   // distance label on the line
   g.fillStyle = "#e8edf6"; g.font = `600 20px "IBM Plex Sans", system-ui`;
   g.fillText(`${Math.round(d * q).toLocaleString()} km`, (sx + ox) / 2 - 120, (sy + oy) / 2 + 8);
+}
+
+// ---- size: the measured thermal cross-section next to the object's published outline, same scale
+function drawSize(cv, c) {
+  const g = cv.getContext("2d"), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H);
+  const a = c && emittingArea(c);
+  if (!a) return;
+  const real = c.satellite.norad === "16910" ? { w: 10.32, h: 2.49, label: "H-1 second stage, 10.3 × 2.5 m (published)" }
+             : c.satellite.norad === "19649" ? { w: 22.7, h: 1.4, label: "Tselina-2 with panels, 22.7 m span (published)" } : null;
+  const side = Math.sqrt(a.m2), sideLo = Math.sqrt(a.lo), sideHi = Math.sqrt(a.hi);
+  const k = (W * 0.42) / Math.max(sideHi, real ? real.w : 0);     // px per metre
+  g.font = `18px "IBM Plex Sans", system-ui`; g.fillStyle = MUTED;
+  // measured: a square of the fitted area, with the range as fainter squares
+  const cx = W * 0.3, cy = H * 0.5;
+  [[sideHi, .18], [side, .55], [sideLo, .9]].forEach(([s, al]) => {
+    g.fillStyle = HOT; g.globalAlpha = al; g.fillRect(cx - s * k / 2, cy - s * k / 2, s * k, s * k);
+  });
+  g.globalAlpha = 1; g.fillStyle = "#e8edf6"; g.font = `600 20px "IBM Plex Sans", system-ui`;
+  g.fillText(`${Math.round(a.m2)} m² measured`, cx - 90, cy + sideHi * k / 2 + 34);
+  g.font = `16px "IBM Plex Sans", system-ui`; g.fillStyle = MUTED;
+  g.fillText(`${Math.round(a.lo)}–${Math.round(a.hi)} m² over the temperature range`, cx - 150, cy + sideHi * k / 2 + 58);
+  if (real) {
+    const rx = W * 0.72, ry = H * 0.5;
+    g.strokeStyle = COLD; g.lineWidth = 3; g.strokeRect(rx - real.w * k / 2, ry - real.h * k / 2, real.w * k, real.h * k);
+    g.fillStyle = "#e8edf6"; g.font = `600 20px "IBM Plex Sans", system-ui`;
+    g.fillText(`${Math.round(real.w * real.h)} m² side-on`, rx - 70, ry + Math.max(real.h * k / 2, 20) + 34);
+    g.font = `16px "IBM Plex Sans", system-ui`; g.fillStyle = MUTED;
+    g.fillText(real.label, rx - 170, ry + Math.max(real.h * k / 2, 20) + 58);
+  }
+  // scale bar: 5 m
+  g.strokeStyle = "#e8edf6"; g.lineWidth = 2; g.beginPath(); g.moveTo(30, H - 40); g.lineTo(30 + 5 * k, H - 40); g.stroke();
+  g.fillStyle = MUTED; g.font = `16px "IBM Plex Sans", system-ui`; g.fillText("5 m", 30, H - 50);
 }
 
 // ================================================================ THE EXPLORER
@@ -406,6 +478,7 @@ function card(c, base) {
       <tr><td>Same ratio, ${c.n_stars} stars in these images</td><td>${r(c.ratio_stars)}</td></tr>
       <tr><td>Sunlight alone would give</td><td>${r(c.ratio_reflected_only)}</td></tr>
     </table>
+    ${(() => { const a = emittingArea(c); return a ? `<p class="area"><b>${fmtArea(a)}</b> thermal cross-section <span class="small">(${fmtAreaRange(a)}). ${KNOWN_SIZE[sat.norad] || ""}</span></p>` : ""; })()}
     ${sat ? `<canvas class="geo" width="640" height="360"></canvas>` : ""}
     <button class="btn ghost small">Show on the sky map</button>`;
   el.querySelector("button").onclick = () => mapStreak(c.line_sky);
