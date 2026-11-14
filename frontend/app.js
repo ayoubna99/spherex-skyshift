@@ -12,11 +12,35 @@ const S = { data: null, mode: "stacks", det: 1, list: [], i: 0, timer: null, vie
 const $ = (id) => document.getElementById(id);
 
 // ---------- helpers
-async function api(path) {
-  const r = await fetch(API + path);
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
-  return r.json();
+// Demo targets and the showcase are pre-rendered in static/ (instant, and they work even if the
+// backend is asleep or NASA's archive is busy). Add ?live=1 to always ask the backend.
+const LIVE = params.get("live") === "1";
+function staticPath(path) {
+  if (path === "/api/targets") return "static/targets.json";
+  if (path === "/api/showcase") return "static/showcase.json";
+  const m = path.match(/^\/api\/frames\?target=([\w-]+)$/);
+  return m ? `static/frames_${m[1]}.json` : null;
 }
+async function fetchJSON(url, base) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  const d = await r.json();
+  (Array.isArray(d) ? d : [d]).forEach((x) => { if (x && typeof x === "object") x._base = base; });
+  return d;
+}
+async function api(path) {
+  const sp = staticPath(path);
+  if (sp && !LIVE) {
+    try { return await fetchJSON(sp, "static"); } catch (e) { /* fall through to the backend */ }
+  }
+  try { return await fetchJSON(API + path, API); }
+  catch (e) {
+    if (sp && LIVE) return fetchJSON(sp, "static");
+    throw e;
+  }
+}
+const offline = (e) => e instanceof TypeError;      // fetch() network failure
+const imgURL = (base, png) => `${base || API}/${png}`;
 function status(msg, busy = false) { $("status").textContent = msg || ""; $("status").classList.toggle("busy", busy); }
 function fmtDate(s) { return s ? s.slice(0, 10) : ""; }
 
@@ -86,7 +110,8 @@ async function loadView(v) {
     buildDetButtons();
     rebuildList(); show(0); syncURL();
   } catch (e) {
-    $("title").textContent = "Could not load"; status(e.message); $("empty").textContent = "Something went wrong: " + e.message;
+    const msg = offline(e) ? "The live server is not reachable right now (it may be waking up). Try again in a minute, or pick one of the ready-made targets above." : "Something went wrong: " + e.message;
+    $("title").textContent = "Could not load"; status(""); $("empty").textContent = msg;
   }
 }
 function buildDetButtons() {
@@ -124,7 +149,7 @@ function show(i) {
   if (!S.list.length) { $("frame").removeAttribute("src"); $("empty").hidden = false; $("empty").textContent = "No images for this detector."; $("frameInfo").textContent = ""; return; }
   S.i = (i + S.list.length) % S.list.length;
   const it = S.list[S.i];
-  $("frame").src = API + "/" + it.png;
+  $("frame").src = imgURL(S.data._base, it.png);
   $("empty").hidden = true;
   $("frameInfo").textContent = `${S.i + 1}/${S.list.length} · ${label(it)}`;
 }
@@ -145,7 +170,7 @@ async function findSatellites() {
     const r = await api(`/api/streaks?url=${encodeURIComponent(it.url)}&det=${it.detector}`);
     renderCards([r], `Exposure ${it.obs_id} (${fmtDate(it.date)})`);
     status(`${r.streaks.length} satellite(s) measured in this exposure.`);
-  } catch (e) { status("Satellite search failed: " + e.message); }
+  } catch (e) { status(offline(e) ? "The live analysis server is not reachable right now. Try again in a minute, or open the 🛰 Satellite showcase." : "Satellite search failed: " + e.message); }
   $("findSatBtn").disabled = false;
 }
 async function loadShowcase() {
@@ -159,10 +184,10 @@ async function loadShowcase() {
 function renderCards(results, heading) {
   const box = $("cards"); box.innerHTML = `<p class="small">${heading}</p>`;
   let n = 0;
-  results.forEach((res) => res.streaks.forEach((c) => { n++; box.appendChild(card(c)); }));
+  results.forEach((res) => res.streaks.forEach((c) => { n++; box.appendChild(card(c, res._base)); }));
   if (!n) box.innerHTML += `<p class="small">No satellite streak with enough signal in this exposure.</p>`;
 }
-function card(c) {
+function card(c, base) {
   const el = document.createElement("div"); el.className = "card";
   const T = c.temp_k ? `${c.temp_k} K` : "—";
   const range = c.temp_range_k ? `(${c.temp_range_k[0]}–${c.temp_range_k[1]} K)` : "(temperature needs the 3.8–5 µm cameras)";
@@ -179,8 +204,8 @@ function card(c) {
     <div><span class="temp">${T}</span> <span class="small">${range} · about ${c.temp_k ? (c.temp_k - 273) + " °C" : "?"}</span></div>
     <div class="small">${fmtDate(c.date)} · cameras D${c.detectors[0]} + D${c.detectors[1]} · streak ${c.length_deg.toFixed(1)}° long</div>
     <div class="row">
-      <figure><img src="${API}/${c.png_short}"><figcaption>reflected light, ${c.wavelength_short_um.toFixed(1)} µm</figcaption></figure>
-      <figure><img src="${API}/${c.png_long}"><figcaption>heat glow, ${c.wavelength_long_um.toFixed(1)} µm</figcaption></figure>
+      <figure><img src="${imgURL(base, c.png_short)}"><figcaption>reflected light, ${c.wavelength_short_um.toFixed(1)} µm</figcaption></figure>
+      <figure><img src="${imgURL(base, c.png_long)}"><figcaption>heat glow, ${c.wavelength_long_um.toFixed(1)} µm</figcaption></figure>
     </div>
     <canvas width="560" height="320"></canvas>
     <table>

@@ -24,7 +24,7 @@ from PIL import Image
 from scipy import ndimage
 from scipy.optimize import curve_fit
 
-from . import identify, spherex
+from . import frames, identify, spherex
 
 astropy_log.setLevel("ERROR")
 warnings.simplefilter("ignore", FITSFixedWarning)
@@ -350,7 +350,7 @@ def analyse(url, det):
     key = hashlib.md5(f"v3|{urls[s_det]}".encode()).hexdigest()[:12]
     cache = spherex.CACHE / f"streaks_{key}.json"
     if cache.exists():
-        return json.loads(cache.read_text())
+        return frames.clean(json.loads(cache.read_text()))
 
     short = Exposure(fetch_full(urls[s_det]))
     long_ = Exposure(fetch_full(urls[l_det]))
@@ -427,5 +427,6 @@ def analyse(url, det):
         })
     out = {"key": key, "date": short.date, "mjd": Time(short.date).mjd if short.date else None,
            "detectors": [s_det, l_det], "n_streaks_flagged": len(uniq), "streaks": cards}
+    out = frames.clean(out)
     cache.write_text(json.dumps(out))
     return out

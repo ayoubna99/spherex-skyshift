@@ -74,9 +74,15 @@
 </main>
 
 <footer>
-  Data: NASA SPHEREx (DR1, QR3) via NASA/IPAC Infrared Science Archive. Sky map: Aladin Lite (CDS). NASA Space Apps Challenge 2026 · Planet X and SPHEREx.
+  Data: NASA SPHEREx (DR1, QR3) via NASA/IPAC Infrared Science Archive. Satellite orbits: Space-Track.org. Sky map: Aladin Lite (CDS), AllWISE.
+  NASA Space Apps Challenge 2026 · Planet X and SPHEREx ·
+  <a href="https://github.com/ayoubna99/spherex-skyshift#readme" target="_blank" rel="noopener">How it works, sources and code</a>
 </footer>
 
+<script>
+  // Backend URL for live searches. Demo targets and the showcase work without it (static/).
+  window.SKYSHIFT_API = window.SKYSHIFT_API || "http://localhost:8000";
+</script>
 <script src="app.js"></script>
 </body>
 </html>

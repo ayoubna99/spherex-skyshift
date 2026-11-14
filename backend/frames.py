@@ -139,12 +139,23 @@ def save_diff(d, lim, name):
     return f"img/{name}"
 
 
+def clean(x):
+    """Replace NaN/inf with None so the result is valid JSON (some exposures lack a wavelength)."""
+    if isinstance(x, float):
+        return x if np.isfinite(x) else None
+    if isinstance(x, dict):
+        return {k: clean(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [clean(v) for v in x]
+    return x
+
+
 def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name=None):
     key = hashlib.md5(f"v5|{ra:.5f}|{dec:.5f}|{size_deg:.4f}|{per_epoch_det}|{dets}|{spherex.COLLECTIONS}"
                       .encode()).hexdigest()[:12]
     cached = spherex.CACHE / f"result_{key}.json"
     if cached.exists():
-        return json.loads(cached.read_text())
+        return clean(json.loads(cached.read_text()))
 
     rows = [r for r in spherex.search(ra, dec) if r["detector"] in dets]
     n_epochs = group_epochs(rows)
@@ -220,5 +231,6 @@ def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name
         "n_images_found": len(rows), "n_epochs": n_epochs,
         "frames": frames, "stacks": stacks, "diffs": diffs, "streaks": [],
     }
+    result = clean(result)
     cached.write_text(json.dumps(result))
     return result

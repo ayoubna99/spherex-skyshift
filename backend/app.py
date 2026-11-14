@@ -5,10 +5,11 @@ Run locally:  uvicorn backend.app:app --reload   (from the repo root)
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from astropy.time import Time
 
 from . import frames, spherex, streaks
 from .targets import TARGETS, position_at
+
+MID_EPOCH = 2026.37          # decimal year, middle of DR1 + QR3
 
 app = FastAPI(title="SkyShift API", version="0.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
@@ -39,9 +40,9 @@ def get_frames(
         if target not in TARGETS:
             raise HTTPException(404, f"unknown target '{target}'")
         t = TARGETS[target]
-        # centre on the object's position in 2026.0 (middle of the data); it moves a few
-        # arcseconds across the epochs, which is exactly what the flipbook shows
-        ra, dec = position_at(target, Time.now().decimalyear - 0.5)
+        # centre on the object's position in the middle of the data (fixed, so results cache);
+        # it moves a few arcseconds across the epochs, which is exactly what the flipbook shows
+        ra, dec = position_at(target, MID_EPOCH)
         name, size_deg = t["name"], t["size_deg"]
     if ra is None or dec is None:
         raise HTTPException(400, "give ra and dec (degrees) or a target")
