@@ -408,11 +408,14 @@ function setBand(n) {
 }
 function stopSweep() { clearInterval(S.sweep); S.sweep = null; $("bandPlay").textContent = "Sweep"; }
 $("baseSeg").onclick = (e) => { if (e.target.dataset.base) setBase(e.target.dataset.base); };
-$("bandRange").oninput = (e) => { stopSweep(); setBand(+e.target.value); };
+$("bandRange").oninput = (e) => { stopSweep(); clearTimeout(S.bandT); $("bandLabel").textContent = SPHEREX_UM[+e.target.value - 1].toFixed(2) + " µm"; S.bandT = setTimeout(() => setBand(+e.target.value), 250); };
 $("bandPlay").onclick = () => {
   if (S.sweep) return stopSweep();
+  // Each frame is a fresh set of tiles from IRSA; at a wide field that is hundreds of requests per step and the
+  // server starts resetting connections. Keep the sweep gentle, and refuse it when the field is very wide.
+  if (S.aladin && S.aladin.getFov()[0] > 8) { status("Zoom in to under 8° before sweeping the wavelengths — each step reloads the whole view from NASA."); return; }
   $("bandPlay").textContent = "Stop";
-  S.sweep = setInterval(() => { let n = +$("bandRange").value + 1; if (n > 102) n = 1; setBand(n); }, 350);
+  S.sweep = setInterval(() => { let n = +$("bandRange").value + 3; if (n > 102) n = 1; setBand(n); }, 1200);
 };
 function initAladin() {
   if (!window.A || S.aladinStarted) return;
