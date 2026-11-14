@@ -9,6 +9,11 @@ import os
 import sys
 import traceback
 
+# Shared hosting caps the number of processes/threads per account. NumPy's maths library would
+# otherwise start one thread per server CPU (48) and fail. One thread each is plenty here.
+for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 try:
