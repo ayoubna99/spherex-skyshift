@@ -100,6 +100,21 @@ strong, b { font-weight: 600; }
 .sat-row img { width: 100%; border-radius: 14px; border: 1px solid var(--line); }
 .sat-row .numbers { margin: 10px 0 16px; }
 
+/* ---------- census */
+.census { margin-top: 56px; padding-top: 40px; border-top: 1px solid var(--line); }
+.census > p { color: #d5dce8; max-width: 80ch; }
+.census .numbers { margin: 14px 0 22px; }
+.census-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.census-charts figure { margin: 0; }
+.census-charts canvas { width: 100%; height: auto; background: #080c14; border-radius: 12px; border: 1px solid var(--line); }
+.census-charts figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; line-height: 1.4; }
+.census-table { margin-top: 18px; }
+.census-table summary { cursor: pointer; color: var(--cold); }
+.census-table table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+.census-table td, .census-table th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; }
+.census-table td:first-child, .census-table th:first-child { text-align: left; }
+@media (max-width: 960px) { .census-charts { grid-template-columns: 1fr; } }
+
 /* ---------- the explorer */
 .explore { background: var(--bg2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 72px 0 60px; }
 .explore > * { max-width: var(--wrap); margin-left: auto; margin-right: auto; padding-left: 32px; padding-right: 32px; }

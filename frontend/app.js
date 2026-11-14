@@ -56,11 +56,21 @@ function planckMJysr(um, T) {        // Planck B_nu in MJy/sr
   const h = 6.62607e-34, c = 2.99792e8, k = 1.380649e-23, nu = c / (um * 1e-6);
   return 2 * h * nu ** 3 / c ** 2 / (Math.exp(h * nu / (k * T)) - 1) / 1e-26 / 1e6;
 }
+// SPHEREx fits a straight line to the charge ramp over the exposure. A satellite deposits its charge in one
+// instant t0, so the fitted slope is 6*t0*(T-t0)/T^2 times the slope a steady source of the same total charge
+// would give (1.5x at mid-exposure, ->0 at the ends). The two-camera ratio is immune; absolute flux is not.
+function surFactor(c) {
+  const sat = c.satellite, T = c.exposure_s || 115;
+  if (!sat || !sat.time_utc || !c.date) return 1;
+  const t0 = (Date.parse(sat.time_utc + "Z") - Date.parse(c.date + "Z")) / 1000;
+  if (!(t0 > 0 && t0 < T)) return 1;
+  return Math.max(0.2, 6 * t0 * (T - t0) / (T * T));
+}
 function emittingArea(c) {
   const sat = c.satellite;
   if (!sat || !c.temp_k || !c.flux_long || !sat.crossing_s || !sat.distance_km) return null;
   const w = (c.length_deg * Math.PI / 180) / sat.crossing_s, T = c.exposure_s || 115;
-  const F = c.flux_long * PX_RAD * w * T;                             // MJy
+  const F = c.flux_long / surFactor(c) * PX_RAD * w * T;              // MJy, corrected for when it crossed
   const area = (Tk) => F / (EPS * planckMJysr(c.wavelength_long_um, Tk)) * (sat.distance_km * 1e3) ** 2;
   return { m2: area(c.temp_k), lo: area(c.temp_range_k[1]), hi: area(c.temp_range_k[0]), fluxJy: F * 1e6 };
 }
@@ -284,6 +294,61 @@ function drawSize(cv, c) {
   // scale bar: 5 m
   g.strokeStyle = "#e8edf6"; g.lineWidth = 2; g.beginPath(); g.moveTo(30, H - 40); g.lineTo(30 + 5 * k, H - 40); g.stroke();
   g.fillStyle = MUTED; g.font = `16px "IBM Plex Sans", system-ui`; g.fillText("5 m", 30, H - 50);
+}
+
+// ================================================================ THE CENSUS (static/census.json)
+async function initCensus() {
+  let d;
+  try { d = await fetchJSON("static/census.json", "static"); } catch (e) { return; }
+  if (!d || !d.n_measured) return;
+  $("census").hidden = false;
+  const n = (k) => d[k] ?? 0;
+  $("censusNumbers").innerHTML = [
+    [n("n_attempted"), "catalogued trails sampled"], [n("n_on_long_pair"), "on a long-wave camera pair"],
+    [n("n_measured"), "detected in the long camera"], [n("n_ratio_limits"), "seen in heat only (no reflected light detected)"], [n("n_with_temp"), "with a constrained temperature"],
+    [d.ratio_median ? d.ratio_median.toFixed(0) + "×" : "—", "median long/short (stars: " + (d.stars_median ? d.stars_median.toFixed(2) : "—") + "×)"],
+    [d.temp_median ? Math.round(d.temp_median) + " K" : "—", d.temp_p16_p84 ? `median temperature (16–84%: ${Math.round(d.temp_p16_p84[0])}–${Math.round(d.temp_p16_p84[1])} K)` : "median temperature"],
+  ].map(([v, l]) => `<span><b>${v}</b>${l}</span>`).join("");
+  drawHist($("ratioHist"), d.rows.filter((r) => r.ratio > 0 && !r.ratio_is_limit).map((r) => Math.log10(r.ratio)), {
+    xmin: -1, xmax: 3.25, bins: 17, color: HOT, xlabel: "long / short brightness", ticks: [[-1, "0.1×"], [0, "1×"], [1, "10×"], [2, "100×"], [3, "1000×"]],
+    bands: [{ lo: Math.log10(0.2), hi: Math.log10(0.3), color: COLD, label: "stars" }], lines: [{ x: Math.log10(0.27), label: "sunlight only" }],
+    extra: d.rows.filter((r) => r.ratio > 0 && r.ratio_is_limit).map((r) => Math.log10(r.ratio)), extraLabel: "lower limits (no short-camera detection)",
+  });
+  drawHist($("tempHist"), d.rows.filter((r) => r.temp_k).map((r) => r.temp_k), {
+    xmin: 150, xmax: 500, bins: 14, color: HOT, xlabel: "temperature (K)", ticks: [[200, "200"], [280, "280"], [350, "350"], [450, "450"]],
+    bands: [{ lo: 277, hi: 283, color: "#8b96ad", label: "280 K model" }], lines: [],
+  });
+  const tb = $("censusTable");
+  tb.innerHTML = `<tr><th>Exposure</th><th>Date</th><th>Cameras</th><th>Length</th><th>Long/short</th><th>Stars</th><th>T (K)</th></tr>` +
+    d.rows.map((r) => `<tr><td>${esc(r.obsid)}</td><td>${r.date}</td><td>D${r.pair[0]}+D${r.pair[1]}</td><td>${r.length_deg}°</td><td>${r.ratio ? (r.ratio_is_limit ? "> " : "") + r.ratio.toFixed(1) + "×" : "—"}</td><td>${r.ratio_stars ? r.ratio_stars.toFixed(2) + "×" : "—"}</td><td>${r.temp_k ? `${r.temp_k} (${r.temp_range_k[0]}–${r.temp_range_k[1]})` : "—"}</td></tr>`).join("");
+  $("censusNote").textContent = `Sample: a seeded random draw from the ${d.n_catalogued.toLocaleString()} trails in the catalogue, in DR1 reprocessing. Selection effects: our detector needs the pipeline's STREAK flag and a long enough line, so faint trails drop out, and short-wave-only pairs (D1/D4) are skipped. Ratios are robust to when the satellite crossed the exposure; absolute fluxes are not. Trails measured on D2/D5 use 1.4 and 4.1 µm instead of 2.0 and 4.7 µm, which lowers the ratio for the same temperature.`;
+}
+function drawHist(cv, xs, o) {
+  const g = cv.getContext("2d"), W = cv.width, H = cv.height, L = 60, R = 20, T = 30, B = 70;
+  g.clearRect(0, 0, W, H);
+  const X = (x) => L + (x - o.xmin) / (o.xmax - o.xmin) * (W - L - R);
+  const counts = new Array(o.bins).fill(0);
+  xs.forEach((x) => { const i = Math.floor((x - o.xmin) / (o.xmax - o.xmin) * o.bins); if (i >= 0 && i < o.bins) counts[i]++; });
+  const ec2 = new Array(o.bins).fill(0);
+  (o.extra || []).forEach((x) => { const i = Math.floor((x - o.xmin) / (o.xmax - o.xmin) * o.bins); if (i >= 0 && i < o.bins) ec2[i]++; });
+  const ymax = Math.max(1, ...counts.map((c, i) => c + ec2[i])), Y = (c) => H - B - c / ymax * (H - T - B);
+  g.font = `16px "IBM Plex Sans", system-ui`;
+  o.bands.forEach((b) => { g.fillStyle = b.color; g.globalAlpha = .25; g.fillRect(X(b.lo), T, X(b.hi) - X(b.lo), H - T - B); g.globalAlpha = 1; g.fillStyle = b.color; g.fillText(b.label, X(b.hi) + 6, T + 40); });
+  o.lines.forEach((l) => { g.strokeStyle = "#4b5872"; g.setLineDash([6, 6]); g.beginPath(); g.moveTo(X(l.x), T); g.lineTo(X(l.x), H - B); g.stroke(); g.setLineDash([]); g.fillStyle = MUTED; g.fillText(l.label, X(l.x) + 6, H - B - 8); });
+  const bw = (W - L - R) / o.bins;
+  counts.forEach((c, i) => { if (!c) return; g.fillStyle = o.color; g.fillRect(L + i * bw + 1, Y(c), bw - 2, H - B - Y(c)); });
+  if (o.extra && o.extra.length) {               // lower limits: hollow bars stacked on top, with arrows
+    const ec = new Array(o.bins).fill(0);
+    o.extra.forEach((x) => { const i = Math.floor((x - o.xmin) / (o.xmax - o.xmin) * o.bins); if (i >= 0 && i < o.bins) ec[i]++; });
+    ec.forEach((c, i) => { if (!c) return; const y0 = Y(counts[i]), y1 = Y(counts[i] + c); g.strokeStyle = o.color; g.lineWidth = 2; g.strokeRect(L + i * bw + 2, y1, bw - 4, y0 - y1); g.fillStyle = o.color; g.fillText("→", L + i * bw + bw / 2 - 6, y1 - 6); });
+    g.fillStyle = MUTED; g.fillText("hollow → " + o.extraLabel, L + 10, H - B - 30);
+  }
+  g.strokeStyle = "#2a3448"; g.beginPath(); g.moveTo(L, H - B); g.lineTo(W - R, H - B); g.moveTo(L, T); g.lineTo(L, H - B); g.stroke();
+  g.fillStyle = MUTED;
+  o.ticks.forEach(([x, t]) => { g.fillText(t, X(x) - 10, H - B + 22); });
+  g.fillText(o.xlabel, W / 2 - 60, H - 14);
+  for (let c = 0; c <= ymax; c += Math.max(1, Math.ceil(ymax / 4))) g.fillText(c, L - 28, Y(c) + 5);
+  g.fillText(`N = ${xs.length + (o.extra ? o.extra.length : 0)}`, W - R - 80, T + 16);
 }
 
 // ================================================================ THE EXPLORER
@@ -546,6 +611,7 @@ document.addEventListener("keydown", (e) => {
 
 initAladin();
 initReveal();
+initCensus();
 initTargets().then(() => {
   if (params.get("mode")) S.mode = params.get("mode");
   if (params.get("det")) S.det = +params.get("det");

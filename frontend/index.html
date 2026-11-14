@@ -133,6 +133,18 @@
       </div>
     </div>
   </div>
+
+  <div class="census" id="census" hidden>
+    <h3>Then we did it to the whole catalogue (a pilot)</h3>
+    <p>NASA Ames published a list of 2,182 satellite trails they found by eye in SPHEREx images (Borlaff et al. 2026). We took a random sample, fetched the same exposures from IRSA, and ran the same two-camera photometry on every one — no hand-picking. This is the first distribution of 2–5 µm thermal colours for satellites from a public all-sky survey, to our knowledge. Objects are unnamed here (naming needs orbit data for each date); the colour ratio is the robust number, the temperature needs the 3.8–5 µm camera and enough wing signal.</p>
+    <p class="numbers" id="censusNumbers"></p>
+    <div class="census-charts">
+      <figure><canvas id="ratioHist" width="900" height="520"></canvas><figcaption>Long-camera over short-camera brightness for each measured trail (log scale). The blue band is the same ratio for the stars in the same images; the dashed line is pure reflected sunlight.</figcaption></figure>
+      <figure><canvas id="tempHist" width="900" height="520"></canvas><figcaption>Blackbody temperature from the 4.4–5.0 µm slope, for trails with enough long-camera signal. Grey band: the 280 K satellite model NASA Ames used.</figcaption></figure>
+    </div>
+    <details class="census-table"><summary>Every measured trail</summary><table id="censusTable"></table></details>
+    <p class="small" id="censusNote"></p>
+  </div>
 </section>
 
 <!-- ============ EXPLORE ============ -->
@@ -232,7 +244,7 @@
     </div>
     <div>
       <h3>Size</h3>
-      <p>Thermal flux is emissivity × area × Planck(T) / distance². With the temperature from the fit and the distance from the orbit match, the streak's brightness (corrected for the crossing rate, using the exposure length from the header) gives a thermal cross-section, assuming an emissivity of 0.9. Published dimensions for the comparison: H-1 second stage 10.32 m × 2.49 m (Encyclopedia Astronautica, LE-5 stage); Tselina-2 bus 4.5 m × 1.4 m, 22.7 m span (KeepTrack catalogue). Agreement is within a factor of a few: an order-of-magnitude size with no albedo assumption, which optical tracking cannot give.</p>
+      <p>Thermal flux is emissivity × area × Planck(T) / distance². With the temperature from the fit and the distance from the orbit match, the streak's brightness (corrected for the crossing rate, for the exposure length from the header, and for when in the ramp the satellite crossed — SPHEREx fits a slope to the charge ramp, so an instantaneous deposit at time t gives 6t(T−t)/T² of the steady-source slope) gives a thermal cross-section, assuming an emissivity of 0.9. Reflected sunlight at 4.7 µm is under 2% of the measured long-camera flux for these objects (the short camera fixes it), so it does not bias the fit. Published dimensions for the comparison: H-1 second stage 10.32 m × 2.49 m (Encyclopedia Astronautica, LE-5 stage); Tselina-2 bus 4.5 m × 1.4 m, 22.7 m span (KeepTrack catalogue). Agreement is within a factor of a few: an order-of-magnitude size with no albedo assumption, which optical tracking cannot give.</p>
     </div>
     <div>
       <h3>Limits</h3>
