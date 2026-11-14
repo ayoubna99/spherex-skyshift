@@ -32,6 +32,29 @@ brightness stretch** (so brightness changes between frames are real, not display
 - `wavelength_um`: wavelength at the target position (each SPHEREx pixel sees a different wavelength).
 - `flags.streak`: the pipeline flagged a satellite streak in this cutout.
 
+**Real response (live backend) also contains** — use these for the flipbook:
+
+```json
+"n_epochs": 3,
+"stacks": [
+  {"epoch": 0, "detector": 1, "band": "0.75–1.09 µm", "n_frames": 2, "date": "2025-09-13",
+   "png": "img/acb1398b1633_stack_e0_d1.png", "streak": false}
+],
+"diffs": [
+  {"detector": 1, "from_epoch": 0, "to_epoch": 1, "png": "img/acb1398b1633_diff_e0e1_d1.png"}
+]
+```
+
+- **epoch** = one ~6-month sky survey pass (0 = Aug–Sep 2025, 1 = Mar–Apr 2026, 2 = Aug–Sep 2026 for Barnard).
+- **Flipbook (default):** pick one detector (D1…D6, a "color" of infrared light), show its `stacks` in epoch order.
+  Every image of one detector uses the same brightness scale, so real changes stay visible.
+- **Difference mode:** show `diffs` for that detector: orange = brighter in the later epoch, blue = brighter before.
+  A moving star appears as a blue/orange pair.
+- **All exposures mode:** `frames` (individual exposures, sorted by date).
+- Image URLs are relative to the backend base URL, e.g. `https://<backend>/img/...png`.
+- The target is always at the exact centre pixel. Images are north-up, east-left.
+- First request for a new position can take 1–3 minutes (downloads from NASA); after that it is cached.
+
 ## Streak object (inside `streaks`)
 
 ```json
