@@ -28,3 +28,13 @@ Full list of data sources, tools and licenses: to be completed.
 ## License
 
 MIT — see `LICENSE`.
+
+## Run the backend locally
+
+```bash
+pip install -r requirements.txt
+uvicorn backend.app:app --reload        # then open http://localhost:8000/api/frames?target=barnard
+```
+
+On Render: build command `pip install -r requirements.txt`, start command
+`uvicorn backend.app:app --host 0.0.0.0 --port $PORT`.
