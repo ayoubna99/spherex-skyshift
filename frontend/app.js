@@ -1,21 +1,23 @@
 // SkyShift frontend. Talks to the backend API described in docs/api.md.
+// Two parts: the reveal (static showcase data, no backend) and the explorer (static snapshot or live API).
 const params = new URLSearchParams(location.search);
 const API = (params.get("api") || window.SKYSHIFT_API || "http://localhost:8000").replace(/\/$/, "");
+const LIVE = params.get("live") === "1";
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const BANDS = { 1: "0.75–1.09 µm", 2: "1.10–1.62 µm", 3: "1.63–2.41 µm", 4: "2.42–3.82 µm", 5: "3.83–4.41 µm", 6: "4.42–5.00 µm" };
 const MODE_HINT = {
-  color: "Each image is one SPHEREx sky pass (about every 6 months). False colour: 4.7 µm infrared → red, 2 µm → green, 0.9 µm → blue. Cool things look red, hot stars blue-white.",
-  stacks: "Each image is one SPHEREx sky pass (about every 6 months), stacked for clarity. Same brightness scale throughout, so changes are real. The target is at the centre marks.",
-  diffs: "Later pass minus earlier pass. Orange = brighter now, blue = brighter before. A moving star shows up as a blue–orange pair.",
-  frames: "Every single exposure, in time order. Pick one and ask which satellites crossed it.",
+  color: "One image per sky pass, about every six months. False colour: 4.7 µm → red, 2 µm → green, 0.9 µm → blue. Cool objects look red, hot stars blue-white.",
+  stacks: "One image per sky pass, stacked for clarity, all on the same brightness scale. The target sits at the centre marks.",
+  diffs: "Later pass minus earlier pass. Amber = brighter now, blue = brighter before. A moving star shows as a blue–amber pair.",
+  frames: "Every single exposure in time order. Pick one and ask which satellites crossed it.",
 };
-const S = { data: null, mode: "color", det: 1, list: [], i: 0, timer: null, view: null, aladin: null };
 const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+const fmtDate = (s) => (s ? s.slice(0, 10) : "");
+const COLD = "#6cc0ff", HOT = "#ffb35c", MUTED = "#8b96ad";
 
-// ---------- helpers
-// Demo targets and the showcase are pre-rendered in static/ (instant, and they work even if the
-// backend is asleep or NASA's archive is busy). Add ?live=1 to always ask the backend.
-const LIVE = params.get("live") === "1";
+// ---------------------------------------------------------------- data access
 function staticPath(path) {
   if (path === "/api/targets") return "static/targets.json";
   if (path === "/api/showcase") return "static/showcase.json";
@@ -31,36 +33,202 @@ async function fetchJSON(url, base) {
 }
 async function api(path) {
   const sp = staticPath(path);
-  if (sp && !LIVE) {
-    try { return await fetchJSON(sp, "static"); } catch (e) { /* fall through to the backend */ }
-  }
+  if (sp && !LIVE) { try { return await fetchJSON(sp, "static"); } catch (e) { /* fall through */ } }
   try { return await fetchJSON(API + path, API); }
-  catch (e) {
-    if (sp && LIVE) return fetchJSON(sp, "static");
-    throw e;
-  }
+  catch (e) { if (sp && LIVE) return fetchJSON(sp, "static"); throw e; }
 }
-const offline = (e) => e instanceof TypeError;      // fetch() network failure
+const offline = (e) => e instanceof TypeError;
 const imgURL = (base, png) => `${base || API}/${png}`;
-function status(msg, busy = false) { $("status").textContent = msg || ""; $("status").classList.toggle("busy", busy); }
-function fmtDate(s) { return s ? s.slice(0, 10) : ""; }
 
-// ---------- targets and URL
+// ================================================================ THE REVEAL
+const R = { scene: 0, timer: null, playing: !REDUCED, streak: null, specAnim: null, geoAnim: null };
+const SCENE_MS = [7000, 11000, 11000, 12000];
+
+function bnu(l, T) { return Math.pow(l, -3) / (Math.exp(14387.77 / (l * T)) - 1); }
+
+async function initReveal() {
+  // scene navigation
+  const nav = $("sceneNav");
+  ["Exposure", "Two cameras", "Temperature", "Name"].forEach((t, i) => {
+    const b = document.createElement("button"); b.textContent = t; b.setAttribute("role", "tab");
+    b.onclick = () => { gotoScene(i); pauseReveal(); };
+    nav.appendChild(b);
+  });
+  $("sceneNext").onclick = () => { gotoScene(R.scene + 1); pauseReveal(); };
+  $("sceneBack").onclick = () => { gotoScene(R.scene - 1); pauseReveal(); };
+  $("scenePlay").onclick = () => (R.playing ? pauseReveal() : resumeReveal());
+  // comparison slider
+  const setCmp = (v) => { $("cmpOver").style.clipPath = `inset(0 ${100 - v}% 0 0)`; $("cmpHandle").style.left = v + "%"; };
+  $("cmpRange").oninput = (e) => { setCmp(+e.target.value); pauseReveal(); };
+  setCmp(50);
+  // showcase data for the spectrum and geometry
+  try {
+    const sc = await api("/api/showcase");
+    R.streak = sc[0].streaks[0];
+  } catch (e) { /* the reveal still works, the spectrum stays empty */ }
+  if (R.streak) {
+    $("specT").textContent = `${R.streak.temp_k} K`;
+    $("bigTsub").textContent = `${R.streak.temp_range_k[0]}–${R.streak.temp_range_k[1]} K · about ${R.streak.temp_k - 273} °C`;
+  }
+  gotoScene(0);
+  // only auto-play while the reveal is on screen
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver((es) => es.forEach((en) => {
+      if (en.isIntersecting && R.playing && !R.timer) schedule();
+      if (!en.isIntersecting) clearTimeout(R.timer), (R.timer = null);
+    }), { threshold: 0.35 }).observe($("reveal"));
+  } else if (R.playing) schedule();
+}
+function schedule() {
+  clearTimeout(R.timer);
+  R.timer = setTimeout(() => { R.timer = null; gotoScene((R.scene + 1) % 4); if (R.playing) schedule(); }, SCENE_MS[R.scene]);
+}
+function pauseReveal() { R.playing = false; clearTimeout(R.timer); R.timer = null; $("scenePlay").textContent = "Auto-play"; $("reveal").classList.remove("auto"); }
+function resumeReveal() { R.playing = true; $("scenePlay").textContent = "Pause"; $("reveal").classList.add("auto"); schedule(); }
+function gotoScene(i) {
+  R.scene = (i + 4) % 4;
+  document.querySelectorAll("#stageBox .scene, .scene-copy .copy").forEach((el) => el.classList.toggle("on", +el.dataset.scene === R.scene));
+  [...$("sceneNav").children].forEach((b, k) => { b.classList.toggle("on", k === R.scene); b.setAttribute("aria-selected", k === R.scene); });
+  $("reveal").style.setProperty("--scene-ms", SCENE_MS[R.scene] + "ms");
+  $("reveal").classList.toggle("auto", R.playing);
+  // restart the bar animation
+  const nav = $("sceneNav"); nav.classList.remove("tick"); void nav.offsetWidth; nav.classList.add("tick");
+  $("sceneNext").textContent = R.scene === 3 ? "Start again" : "Next";
+  if (R.scene === 2) animateSpectrum();
+  if (R.scene === 3) animateGeometry();
+  if (R.playing && !R.timer) schedule();
+}
+
+// ---- spectrum, drawn progressively
+function animateSpectrum() {
+  const cv = $("specCanvas"), c = R.streak;
+  if (!c) return;
+  cancelAnimationFrame(R.specAnim);
+  const t0 = performance.now(), dur = REDUCED ? 0 : 3200;
+  const tick = (now) => {
+    const p = dur ? Math.min(1, (now - t0) / dur) : 1;
+    drawSpectrum(cv, c, p, true);
+    const T = Math.round(c.temp_k * Math.min(1, Math.max(0, (p - 0.55) / 0.45)));
+    $("bigT").textContent = p > 0.55 ? `${T} K` : "…";
+    if (p < 1) R.specAnim = requestAnimationFrame(tick);
+  };
+  R.specAnim = requestAnimationFrame(tick);
+}
+function drawSpectrum(cv, c, progress = 1, big = false) {
+  const g = cv.getContext("2d"), W = cv.width, H = cv.height;
+  const padL = big ? 70 : 46, padB = big ? 54 : 30, padT = big ? 40 : 28, padR = 24;
+  g.clearRect(0, 0, W, H);
+  const pts = c.spectrum.filter((p) => p.value > 0);
+  if (!pts.length) return;
+  const xs = (l) => padL + (l - 1.5) / (5.1 - 1.5) * (W - padL - padR);
+  const vals = pts.map((p) => p.value);
+  const lo = Math.log10(Math.min(...vals) / 3), hi = Math.log10(Math.max(...vals) * 2.2);
+  const ys = (v) => H - padB - (Math.log10(v) - lo) / (hi - lo) * (H - padB - padT);
+  const fs = big ? 20 : 16;
+  g.font = `${fs}px "IBM Plex Sans", system-ui`; g.fillStyle = MUTED;
+  // axes
+  g.strokeStyle = "#1e2638"; g.lineWidth = 1;
+  [2, 3, 4, 5].forEach((l) => { g.beginPath(); g.moveTo(xs(l), padT); g.lineTo(xs(l), H - padB); g.stroke(); g.fillText(l + " µm", xs(l) - fs, H - padB + fs + 6); });
+  g.save(); g.translate(16, H / 2); g.rotate(-Math.PI / 2); g.fillText("brightness (log)", -60, 0); g.restore();
+  // reflected-sunlight-only prediction, scaled to the short camera
+  const sun = (l) => bnu(l, 5772);
+  g.strokeStyle = "#4b5872"; g.setLineDash([7, 7]); g.lineWidth = 2; g.beginPath();
+  for (let l = 1.5; l <= 5.1; l += 0.05) { const v = c.flux_short * sun(l) / sun(c.wavelength_short_um); const y = ys(v); l === 1.5 ? g.moveTo(xs(l), y) : g.lineTo(xs(l), y); }
+  g.stroke(); g.setLineDash([]);
+  // points appear left to right
+  const sorted = [...pts].sort((a, b) => a.um - b.um);
+  const nShow = Math.ceil(sorted.length * Math.min(1, progress / 0.6));
+  sorted.slice(0, nShow).forEach((p) => {
+    g.fillStyle = p.camera === "short" ? COLD : HOT;
+    g.beginPath(); g.arc(xs(p.um), ys(p.value), big ? 6 : 4, 0, 7); g.fill();
+    if (p.err) { g.strokeStyle = g.fillStyle; g.globalAlpha = .5; g.beginPath(); g.moveTo(xs(p.um), ys(Math.max(p.value - p.err, p.value / 4))); g.lineTo(xs(p.um), ys(p.value + p.err)); g.stroke(); g.globalAlpha = 1; }
+  });
+  // blackbody fit draws after the points
+  if (c.temp_k && progress > 0.6) {
+    const q = Math.min(1, (progress - 0.6) / 0.4);
+    g.strokeStyle = HOT; g.lineWidth = big ? 3 : 2; g.beginPath();
+    const l1 = 3.6, l2 = 3.6 + (5.1 - 3.6) * q;
+    for (let l = l1; l <= l2; l += 0.02) { const v = c.flux_long * bnu(l, c.temp_k) / bnu(c.wavelength_long_um, c.temp_k); const y = ys(v); l === l1 ? g.moveTo(xs(l), y) : g.lineTo(xs(l), y); }
+    g.stroke();
+  }
+  // legend
+  g.fillStyle = COLD; g.fillRect(W - (big ? 330 : 300), padT - 10, 12, 12); g.fillStyle = MUTED; g.fillText("short camera", W - (big ? 310 : 282), padT + 1);
+  g.fillStyle = HOT; g.fillRect(W - (big ? 180 : 160), padT - 10, 12, 12); g.fillStyle = MUTED; g.fillText("long camera", W - (big ? 160 : 142), padT + 1);
+  g.fillStyle = MUTED; g.fillText("- - sunlight only", xs(1.6), padT + 1);
+}
+
+// ---- geometry: Earth, SPHEREx, the object, the line of sight — to scale
+function animateGeometry() {
+  cancelAnimationFrame(R.geoAnim);
+  const t0 = performance.now(), dur = REDUCED ? 0 : 2600;
+  const tick = (now) => {
+    const p = dur ? Math.min(1, (now - t0) / dur) : 1;
+    drawGeometry($("geoCanvas"), R.streak?.satellite || { altitude_km: 1508, distance_km: 987, name: "H-1 R/B(MABES)" }, p);
+    if (p < 1) R.geoAnim = requestAnimationFrame(tick);
+  };
+  R.geoAnim = requestAnimationFrame(tick);
+}
+function drawGeometry(cv, sat, p = 1) {
+  const g = cv.getContext("2d"), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H);
+  const RE = 6371, hS = 650, hO = sat.altitude_km, d = sat.distance_km;
+  const r1 = RE + hS, r2 = RE + hO;
+  // angle between the two radius vectors from the triangle Earth–SPHEREx–object
+  const cosT = (r1 * r1 + r2 * r2 - d * d) / (2 * r1 * r2);
+  const theta = Math.acos(Math.max(-1, Math.min(1, cosT)));
+  // zoom on the region above the limb; 1 km = k px
+  const k = (Math.min(W, H) * 0.78) / (hO + 1700);
+  const cx = W * 0.5, cy = H * 0.6 + RE * k;         // Earth centre, far below the canvas
+  const pos = (r, a) => [cx + r * Math.sin(a) * k, cy - r * Math.cos(a) * k];
+  const aS = -theta * 0.55, aO = theta * 0.45;
+  const [sx, sy] = pos(r1, aS), [ox, oy] = pos(r2, aO);
+  // Earth
+  g.fillStyle = "#101a2c"; g.beginPath(); g.arc(cx, cy, RE * k, 0, 7); g.fill();
+  g.strokeStyle = "#2a3a5c"; g.lineWidth = 2; g.stroke();
+  g.font = `18px "IBM Plex Sans", system-ui`; g.fillStyle = MUTED;
+  g.fillText("Earth", cx - 24, cy - RE * k + 34);
+  // orbit rings
+  [[r1, "SPHEREx orbit · about 650 km"], [r2, `${sat.name.replace(/\(.*\)/, "").trim()} · ${hO.toLocaleString()} km`]].forEach(([r, lab], i) => {
+    g.strokeStyle = i ? HOT : COLD; g.globalAlpha = .35; g.setLineDash([4, 8]); g.lineWidth = 1.5;
+    g.beginPath(); g.arc(cx, cy, r * k, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); g.stroke();
+    g.setLineDash([]); g.globalAlpha = 1;
+    g.fillStyle = i ? HOT : COLD; g.fillText(lab, 24, cy - r * k - 10);
+  });
+  // line of sight grows, then the object appears
+  const q = Math.min(1, p / 0.7);
+  g.strokeStyle = "#e8edf6"; g.lineWidth = 2; g.setLineDash([2, 6]); g.beginPath();
+  g.moveTo(sx, sy); g.lineTo(sx + (ox - sx) * q, sy + (oy - sy) * q); g.stroke(); g.setLineDash([]);
+  // SPHEREx
+  g.fillStyle = COLD; g.beginPath(); g.arc(sx, sy, 7, 0, 7); g.fill();
+  g.fillStyle = "#e8edf6"; g.font = `600 18px "IBM Plex Sans", system-ui`; g.fillText("SPHEREx", sx - 90, sy + 8);
+  g.font = `16px "IBM Plex Sans", system-ui`; g.fillStyle = MUTED; g.fillText("looking away from Earth", sx - 90, sy + 30);
+  if (p > 0.7) {
+    const s = Math.min(1, (p - 0.7) / 0.3);
+    g.fillStyle = HOT; g.globalAlpha = s; g.beginPath(); g.arc(ox, oy, 8, 0, 7); g.fill();
+    g.fillStyle = "#e8edf6"; g.font = `600 18px "IBM Plex Sans", system-ui`; g.fillText(sat.name, ox + 16, oy + 6);
+    g.font = `16px "IBM Plex Sans", system-ui`; g.fillStyle = MUTED; g.fillText(`${d.toLocaleString()} km away, crossing the field`, ox + 16, oy + 28);
+    g.globalAlpha = 1;
+  }
+  // distance label on the line
+  g.fillStyle = "#e8edf6"; g.font = `600 20px "IBM Plex Sans", system-ui`;
+  g.fillText(`${Math.round(d * q).toLocaleString()} km`, (sx + ox) / 2 - 120, (sy + oy) / 2 + 8);
+}
+
+// ================================================================ THE EXPLORER
+const S = { data: null, mode: "color", det: 1, list: [], i: 0, timer: null, view: null, aladin: null, front: "A" };
+function status(msg, busy = false) { $("status").textContent = msg || ""; $("status").classList.toggle("busy", busy); }
+
 async function initTargets() {
   const box = $("targets");
   try {
     const ts = await api("/api/targets");
     ts.forEach((t) => {
-      const b = document.createElement("button");
-      b.textContent = t.name; b.title = t.note;
-      b.onclick = () => loadView({ target: t.key });
+      const b = document.createElement("button"); b.className = "target";
+      b.innerHTML = `<b>${esc(t.name)}</b><span>${esc(t.note)}</span>`;
+      b.onclick = () => { loadView({ target: t.key }); };
       box.appendChild(b);
     });
-  } catch (e) { status("Backend not reachable: " + e.message); }
-  const sat = document.createElement("button");
-  sat.textContent = "🛰 Satellite showcase"; sat.className = "special";
-  sat.onclick = loadShowcase;
-  box.appendChild(sat);
+  } catch (e) { status("Targets could not be loaded: " + e.message); }
 }
 function syncURL() {
   const p = new URLSearchParams();
@@ -68,19 +236,20 @@ function syncURL() {
   else if (S.view) { p.set("ra", S.view.ra); p.set("dec", S.view.dec); p.set("fov", S.view.fov); }
   p.set("mode", S.mode); p.set("det", S.det);
   if (params.get("api")) p.set("api", params.get("api"));
-  history.replaceState(null, "", "?" + p.toString());
+  if (LIVE) p.set("live", "1");
+  history.replaceState(null, "", "?" + p.toString() + "#explore");
 }
 
-// ---------- sky map
+// ---- sky map
 function initAladin() {
   if (!window.A || S.aladinStarted) return;
   S.aladinStarted = true;
   A.init.then(() => {
     S.aladin = A.aladin("#aladin", { survey: "P/allWISE/color", fov: 0.5, showReticle: true, showLayersControl: false, showGotoControl: false, showFullscreenControl: false, showFrame: false, showCooGrid: false });
-    S.overlay = A.graphicOverlay({ color: "#ffb347", lineWidth: 2 });
+    S.overlay = A.graphicOverlay({ color: HOT, lineWidth: 2 });
     S.aladin.addOverlay(S.overlay);
     if (S.pendingMap) S.pendingMap();
-  }).catch(() => { $("aladin").hidden = true; });           // no WebGL2: hide the map
+  }).catch(() => { $("aladin").hidden = true; });
 }
 window.addEventListener("aladin-ready", initAladin);
 function mapGoto(ra, dec, fovDeg) {
@@ -97,25 +266,26 @@ function mapStreak(line) {
   S.aladin.gotoRaDec(ra, dec); S.aladin.setFoV(4.5);
 }
 
-// ---------- loading a view
+// ---- loading a view
 async function loadView(v) {
   stop();
   S.view = v; S.data = null; $("cards").innerHTML = "";
   const q = v.target ? `target=${v.target}` : `ra=${v.ra}&dec=${v.dec}&size_deg=${v.fov}`;
   $("title").textContent = "Loading…"; $("empty").hidden = false; $("empty").textContent = "Fetching SPHEREx images from NASA…";
-  status("First time for a position takes 1–3 minutes; after that it is instant.", true);
+  status("A new position takes 1–3 minutes the first time; after that it is instant.", true);
+  document.querySelector(".explore-grid").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "start" });
   try {
     const d = await api("/api/frames?" + q);
     S.data = d;
     if (S.mode === "color" && !(d.color || []).length) S.mode = "stacks";
-    $("title").textContent = `${d.target.name || "Custom position"} · ${d.n_epochs} sky passes · ${d.frames.length} exposures`;
+    $("title").textContent = `${d.target.name || "Custom position"} — ${d.n_epochs} sky passes, ${d.frames.length} exposures`;
     $("ra").value = d.target.ra; $("dec").value = d.target.dec;
-    status(`RA ${d.target.ra.toFixed(4)}°, Dec ${d.target.dec.toFixed(4)}° · field ${(d.target.size_deg * 60).toFixed(1)}′`);
+    status(`RA ${d.target.ra.toFixed(4)}°, Dec ${d.target.dec.toFixed(4)}°, field ${(d.target.size_deg * 60).toFixed(1)}′`);
     mapGoto(d.target.ra, d.target.dec, d.target.size_deg);
-    buildDetButtons();
-    rebuildList(); show(0); syncURL();
+    buildDetButtons(); rebuildList(); show(0); syncURL();
+    if (!REDUCED) play();
   } catch (e) {
-    const msg = offline(e) ? "The live server is not reachable right now (it may be waking up). Try again in a minute, or pick one of the ready-made targets above." : "Something went wrong: " + e.message;
+    const msg = offline(e) ? "The live server is not reachable right now (it may be waking up). Try again in a minute, or pick one of the ready-made targets." : "Something went wrong: " + e.message;
     $("title").textContent = "Could not load"; status(""); $("empty").textContent = msg;
   }
 }
@@ -124,8 +294,7 @@ function buildDetButtons() {
   for (let d = 1; d <= 6; d++) {
     const b = document.createElement("button");
     b.textContent = "D" + d; b.title = BANDS[d];
-    const has = S.data.stacks.some((s) => s.detector === d);
-    b.disabled = !has;
+    b.disabled = !S.data.stacks.some((s) => s.detector === d);
     b.onclick = () => { S.det = d; rebuildList(); show(0); syncURL(); };
     seg.appendChild(b);
   }
@@ -142,33 +311,56 @@ function rebuildList() {
   else if (S.mode === "stacks") S.list = S.data.stacks.filter((s) => s.detector === S.det);
   else if (S.mode === "diffs") S.list = S.data.diffs.filter((s) => s.detector === S.det);
   else S.list = S.data.frames.filter((s) => s.detector === S.det).sort((a, b) => a.mjd - b.mjd);
+  buildTimeline();
 }
-function label(item) {
-  if (S.mode === "color") return `Pass ${item.epoch + 1} · ${item.date} · colour from D${item.detectors.join(" + D")} · ${item.n_frames} exposure(s)${item.streak ? " · 🛰 streak flagged" : ""}`;
-  if (S.mode === "stacks") return `Pass ${item.epoch + 1} · ${item.date} · ${item.band} · ${item.n_frames} exposure(s)${item.streak ? " · 🛰 streak flagged" : ""}`;
+function tlLabel(item) {
+  if (S.mode === "color" || S.mode === "stacks") return item.date;
   if (S.mode === "diffs") {
     const a = S.data.stacks.find((s) => s.epoch === item.from_epoch && s.detector === item.detector);
     const b = S.data.stacks.find((s) => s.epoch === item.to_epoch && s.detector === item.detector);
-    return `${a?.date || "pass " + (item.from_epoch + 1)} → ${b?.date || "pass " + (item.to_epoch + 1)} · ${BANDS[item.detector]}`;
+    return `${a?.date || "?"} → ${b?.date || "?"}`;
   }
-  return `${fmtDate(item.date)} · ${item.wavelength_um ? item.wavelength_um.toFixed(2) + " µm" : item.band} · ${item.obs_id}${item.flags.streak ? " · 🛰 streak flagged" : ""}`;
+  return fmtDate(item.date);
+}
+function buildTimeline() {
+  const tl = $("timeline"); tl.innerHTML = "";
+  if (S.list.length > 40) { tl.hidden = true; return; }
+  tl.hidden = false;
+  S.list.forEach((it, k) => {
+    const b = document.createElement("button"); b.className = "tick" + (it.streak || it.flags?.streak ? " streak" : "");
+    b.innerHTML = `<i></i><span>${esc(tlLabel(it))}</span>`;
+    b.title = it.streak || it.flags?.streak ? "A satellite streak was flagged in this image" : "";
+    b.onclick = () => { stop(); show(k); };
+    tl.appendChild(b);
+  });
+}
+function label(item) {
+  if (S.mode === "color") return `Pass ${item.epoch + 1}, ${item.date}: colour from D${item.detectors.join(" + D")}, ${item.n_frames} exposure(s)${item.streak ? " — streak flagged" : ""}`;
+  if (S.mode === "stacks") return `Pass ${item.epoch + 1}, ${item.date}: ${item.band}, ${item.n_frames} exposure(s)${item.streak ? " — streak flagged" : ""}`;
+  if (S.mode === "diffs") return `${tlLabel(item)}, ${BANDS[item.detector]}`;
+  return `${fmtDate(item.date)}, ${item.wavelength_um ? item.wavelength_um.toFixed(2) + " µm" : item.band}, ${item.obs_id}${item.flags?.streak ? " — streak flagged" : ""}`;
 }
 function show(i) {
-  if (!S.list.length) { $("frame").removeAttribute("src"); $("empty").hidden = false; $("empty").textContent = "No images for this detector."; $("frameInfo").textContent = ""; return; }
+  if (!S.list.length) { $("frameA").removeAttribute("src"); $("frameB").removeAttribute("src"); $("empty").hidden = false; $("empty").textContent = "No images for this detector."; $("frameInfo").textContent = ""; return; }
   S.i = (i + S.list.length) % S.list.length;
   const it = S.list[S.i];
-  $("frame").src = imgURL(S.data._base, it.png);
+  // cross-fade between two stacked images
+  const next = S.front === "A" ? "B" : "A";
+  const img = $("frame" + next);
+  img.onload = () => { $("frame" + next).classList.add("on"); $("frame" + S.front).classList.remove("on"); S.front = next; };
+  img.src = imgURL(S.data._base, it.png);
   $("empty").hidden = true;
-  $("frameInfo").textContent = `${S.i + 1}/${S.list.length} · ${label(it)}`;
+  $("frameInfo").textContent = `${S.i + 1} / ${S.list.length} — ${label(it)}`;
+  [...$("timeline").children].forEach((b, k) => b.classList.toggle("on", k === S.i));
 }
 function play() {
   if (S.timer) return stop();
-  $("playBtn").textContent = "❚❚ Pause";
+  $("playBtn").textContent = "Pause";
   S.timer = setInterval(() => show(S.i + 1), +$("speed").value);
 }
-function stop() { clearInterval(S.timer); S.timer = null; $("playBtn").textContent = "▶ Play"; }
+function stop() { clearInterval(S.timer); S.timer = null; $("playBtn").textContent = "Play"; }
 
-// ---------- satellites
+// ---- satellites in a chosen exposure
 async function findSatellites() {
   const it = S.list[S.i];
   if (!it || !it.url) return;
@@ -176,87 +368,51 @@ async function findSatellites() {
   status("Analysing the full exposure in both cameras…", true);
   try {
     const r = await api(`/api/streaks?url=${encodeURIComponent(it.url)}&det=${it.detector}`);
-    renderCards([r], `Exposure ${it.obs_id} (${fmtDate(it.date)})`);
+    renderCards([r], `Exposure ${it.obs_id}, ${fmtDate(it.date)}`);
     status(`${r.streaks.length} satellite(s) measured in this exposure.`);
-  } catch (e) { status(offline(e) ? "The live analysis server is not reachable right now. Try again in a minute, or open the 🛰 Satellite showcase." : "Satellite search failed: " + e.message); }
+    $("cards").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "nearest" });
+  } catch (e) { status(offline(e) ? "The analysis server is not reachable right now. Try again in a minute." : "Satellite search failed: " + e.message); }
   $("findSatBtn").disabled = false;
 }
-async function loadShowcase() {
-  status("Loading validated satellite streaks…", true);
-  try {
-    const r = await api("/api/showcase");
-    renderCards(r, "Satellites that crossed SPHEREx near Barnard's Star, August 2026");
-    status("");
-  } catch (e) { status("Showcase failed: " + e.message); }
-}
 function renderCards(results, heading) {
-  const box = $("cards"); box.innerHTML = `<p class="small">${heading}</p>`;
+  const box = $("cards"); box.innerHTML = `<h3>${esc(heading)}</h3>`;
   let n = 0;
   results.forEach((res) => res.streaks.forEach((c) => { n++; box.appendChild(card(c, res._base)); }));
-  if (!n) box.innerHTML += `<p class="small">No satellite streak with enough signal in this exposure.</p>`;
+  if (!n) box.innerHTML += `<p class="small">No satellite streak with enough signal in this exposure. Try one marked as flagged on the timeline.</p>`;
 }
 function card(c, base) {
-  const el = document.createElement("div"); el.className = "card";
+  const el = document.createElement("article"); el.className = "card";
   const T = c.temp_k ? `${c.temp_k} K` : "—";
-  const range = c.temp_range_k ? `(${c.temp_range_k[0]}–${c.temp_range_k[1]} K)` : "(temperature needs the 3.8–5 µm cameras)";
+  const range = c.temp_range_k ? `${c.temp_range_k[0]}–${c.temp_range_k[1]} K, about ${c.temp_k - 273} °C` : "temperature needs the 3.8–5 µm cameras";
   const r = (x) => (x == null ? "—" : x >= 10 ? x.toFixed(0) + "×" : x.toFixed(2) + "×");
   const sat = c.satellite;
   const who = sat
-    ? `<div class="sat"><span class="satname">${esc(sat.name)}</span>
-         <a href="https://www.n2yo.com/satellite/?s=${encodeURIComponent(sat.norad)}" target="_blank" rel="noopener">NORAD ${esc(sat.norad)}</a>
-         <div class="small">${sat.distance_km.toLocaleString()} km from SPHEREx · orbiting ${sat.altitude_km.toLocaleString()} km up ·
-         crossed the field at ${sat.time_utc.slice(11)} UTC in ${sat.crossing_s} s · track matches the streak to ${sat.offset_deg}°</div></div>`
-    : `<div class="small">${c.catalog_checked ? "Not in the public satellite catalogue (or orbit too uncertain)" : "Satellite not named yet"}</div>`;
-  const full = c.png_full
-    ? `<figure class="full"><img src="${imgURL(base, c.png_full)}" alt="Whole SPHEREx exposure with the satellite streak">
-         <figcaption>The whole SPHEREx exposure, 3.5° across (seven full Moons). Orange: the pixels SPHEREx flagged as a satellite and set aside${sat ? " — that line is " + esc(sat.name) : ""}.</figcaption></figure>`
-    : "";
+    ? `<p class="satline"><b>${esc(sat.name)}</b> <a href="https://www.n2yo.com/satellite/?s=${encodeURIComponent(sat.norad)}" target="_blank" rel="noopener">NORAD ${esc(sat.norad)}</a><br>
+       <span class="small">${sat.distance_km.toLocaleString()} km from SPHEREx, orbiting ${sat.altitude_km.toLocaleString()} km up. Crossed at ${sat.time_utc.slice(11)} UTC in ${sat.crossing_s} s; track on the streak to ${sat.offset_deg}°.</span></p>`
+    : `<p class="small">${c.catalog_checked ? "Not in the public satellite catalogue, or its orbit is too uncertain." : "Not named yet: the server has no orbit file for this date."}</p>`;
   el.innerHTML = `
+    <p class="temp"><span>${T}</span><small>${range}</small></p>
     ${who}
-    <div><span class="temp">${T}</span> <span class="small">${range} · about ${c.temp_k ? (c.temp_k - 273) + " °C" : "?"}</span></div>
-    <div class="small">${fmtDate(c.date)} · cameras D${c.detectors[0]} + D${c.detectors[1]} · streak ${c.length_deg.toFixed(1)}° long</div>
-    ${full}
+    <p class="small">${fmtDate(c.date)}, cameras D${c.detectors[0]} + D${c.detectors[1]}, streak ${c.length_deg.toFixed(1)}° long.</p>
+    ${c.png_full ? `<img class="full" src="${imgURL(base, c.png_full)}" alt="Whole exposure with the streak">` : ""}
     <div class="row">
-      <figure><img src="${imgURL(base, c.png_short)}"><figcaption>reflected light, ${c.wavelength_short_um.toFixed(1)} µm</figcaption></figure>
-      <figure><img src="${imgURL(base, c.png_long)}"><figcaption>heat glow, ${c.wavelength_long_um.toFixed(1)} µm</figcaption></figure>
+      <figure><img src="${imgURL(base, c.png_short)}" alt=""><figcaption>reflected light, ${c.wavelength_short_um.toFixed(1)} µm</figcaption></figure>
+      <figure><img src="${imgURL(base, c.png_long)}" alt=""><figcaption>heat, ${c.wavelength_long_um.toFixed(1)} µm</figcaption></figure>
     </div>
-    <canvas width="560" height="320"></canvas>
+    <canvas width="640" height="340"></canvas>
     <table>
-      <tr><td>Long / short camera, this satellite</td><td><b>${r(c.ratio_long_short)}</b></td></tr>
-      <tr><td>Same ratio for ${c.n_stars} stars in these images</td><td>${r(c.ratio_stars)}</td></tr>
-      <tr><td>If it only reflected sunlight</td><td>${r(c.ratio_reflected_only)}</td></tr>
-    </table>`;
-  el.onclick = () => mapStreak(c.line_sky);
-  setTimeout(() => drawSpectrum(el.querySelector("canvas"), c), 0);
+      <tr><td>Long camera over short, this satellite</td><td><b>${r(c.ratio_long_short)}</b></td></tr>
+      <tr><td>Same ratio, ${c.n_stars} stars in these images</td><td>${r(c.ratio_stars)}</td></tr>
+      <tr><td>Sunlight alone would give</td><td>${r(c.ratio_reflected_only)}</td></tr>
+    </table>
+    ${sat ? `<canvas class="geo" width="640" height="360"></canvas>` : ""}
+    <button class="btn ghost small">Show on the sky map</button>`;
+  el.querySelector("button").onclick = () => mapStreak(c.line_sky);
+  setTimeout(() => { drawSpectrum(el.querySelector("canvas"), c); if (sat) drawGeometry(el.querySelector("canvas.geo"), sat); }, 0);
   return el;
 }
-function esc(t) { return String(t).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m])); }
-function bnu(l, T) { return Math.pow(l, -3) / (Math.exp(14387.77 / (l * T)) - 1); }
-function drawSpectrum(cv, c) {
-  const g = cv.getContext("2d"), W = cv.width, H = cv.height, pad = 46;
-  const pts = c.spectrum.filter((p) => p.value > 0);
-  if (!pts.length) return;
-  const xs = (l) => pad + (l - 1.5) / (5.1 - 1.5) * (W - pad - 12);
-  const vals = pts.map((p) => p.value);
-  const lo = Math.log10(Math.min(...vals) / 3), hi = Math.log10(Math.max(...vals) * 2);
-  const ys = (v) => H - 30 - (Math.log10(v) - lo) / (hi - lo) * (H - 50);
-  g.fillStyle = "#93a0b8"; g.font = "18px system-ui"; g.fillText("brightness (log)", 8, 22); g.fillText("wavelength (µm)", W / 2 - 60, H - 6);
-  [2, 3, 4, 5].forEach((l) => { g.fillText(l, xs(l) - 5, H - 26); });
-  // reflected-sunlight-only line scaled to the short camera
-  const sun = (l) => bnu(l, 5772);
-  g.strokeStyle = "#5c6a86"; g.setLineDash([6, 6]); g.beginPath();
-  for (let l = 1.5; l <= 5.1; l += 0.05) { const v = c.flux_short * sun(l) / sun(c.wavelength_short_um); const y = ys(v); l === 1.5 ? g.moveTo(xs(l), y) : g.lineTo(xs(l), y); }
-  g.stroke(); g.setLineDash([]);
-  if (c.temp_k) {
-    g.strokeStyle = "#ffb347"; g.beginPath();
-    for (let l = 3.6; l <= 5.1; l += 0.02) { const v = c.flux_long * bnu(l, c.temp_k) / bnu(c.wavelength_long_um, c.temp_k); const y = ys(v); l === 3.6 ? g.moveTo(xs(l), y) : g.lineTo(xs(l), y); }
-    g.stroke();
-  }
-  pts.forEach((p) => { g.fillStyle = p.camera === "short" ? "#5fb3ff" : "#ffb347"; g.beginPath(); g.arc(xs(p.um), ys(p.value), 4, 0, 7); g.fill(); });
-  g.fillStyle = "#93a0b8"; g.fillText("- - reflected sunlight only   — heat glow fit", W - 390, 22);
-}
 
-// ---------- wiring
+// ---- wiring
 $("modeSeg").onclick = (e) => { if (e.target.dataset.mode) { S.mode = e.target.dataset.mode; rebuildList(); show(0); syncURL(); } };
 $("playBtn").onclick = play;
 $("prevBtn").onclick = () => { stop(); show(S.i - 1); };
@@ -266,17 +422,17 @@ $("findSatBtn").onclick = findSatellites;
 $("coordForm").onsubmit = (e) => { e.preventDefault(); loadView({ ra: +$("ra").value, dec: +$("dec").value, fov: +$("fov").value }); };
 $("shareBtn").onclick = () => { navigator.clipboard?.writeText(location.href); status("Link copied."); };
 document.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "INPUT") return;
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName) || !S.data) return;
   if (e.key === " ") { e.preventDefault(); play(); }
   if (e.key === "ArrowRight") { stop(); show(S.i + 1); }
   if (e.key === "ArrowLeft") { stop(); show(S.i - 1); }
 });
 
 initAladin();
+initReveal();
 initTargets().then(() => {
   if (params.get("mode")) S.mode = params.get("mode");
   if (params.get("det")) S.det = +params.get("det");
   if (params.get("target")) loadView({ target: params.get("target") });
   else if (params.get("ra") && params.get("dec")) loadView({ ra: +params.get("ra"), dec: +params.get("dec"), fov: +(params.get("fov") || 0.12) });
-  if (params.get("showcase")) loadShowcase();
 });

@@ -3,89 +3,229 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0f17">
-  <title>SkyShift — what moved through your patch of sky?</title>
-  <meta name="description" content="Explore NASA SPHEREx images over time: moving stars, variable stars, and the satellites crossing the data, with their temperatures.">
+  <meta name="theme-color" content="#06080f">
+  <title>SkyShift — the satellites NASA deletes from the sky, named and measured</title>
+  <meta name="description" content="Three in four SPHEREx images are crossed by a satellite. The pipeline throws those pixels away. SkyShift recovers them, takes the satellite's temperature and names it — then lets you explore any patch of sky over time.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  
 </head>
 <body>
-<header>
-  <div class="brand">
-    <h1>SkyShift</h1>
-    <p>Point at any patch of sky and see what moved through it in NASA SPHEREx images — stars, and the satellites crossing the data, with how hot they are.</p>
+
+<nav class="top">
+  <a class="wordmark" href="#top">SkyShift</a>
+  <div class="links">
+    <a href="#reveal">The reveal</a>
+    <a href="#explore">Explore the sky</a>
+    <a href="#method">How it works</a>
+    <a href="https://github.com/ayoubna99/spherex-skyshift" target="_blank" rel="noopener">Code</a>
   </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="top">
+  <img class="hero-sky" src="static/img/d1b669467802_s0_full.png" alt="A full SPHEREx exposure, 3.5 degrees of sky, crossed by one satellite streak">
+  <div class="hero-text">
+    <p class="kicker">NASA Space Apps 2026 · Planet X and SPHEREx</p>
+    <h1>Three in four SPHEREx images are crossed by a satellite. NASA deletes those pixels.<br><em>We took the satellite's temperature — and found its name.</em></h1>
+    <p class="lede">SkyShift lets anyone replay any patch of sky from NASA's SPHEREx survey — stars that move, stars that flicker — and turns the satellite streaks everyone else deletes into a measurement.</p>
+    <div class="cta">
+      <a class="btn primary" href="#reveal">Watch the reveal — 40 seconds</a>
+      <a class="btn" href="#explore">Explore the sky</a>
+    </div>
+  </div>
+  <p class="hero-caption">This exposure: 18 August 2026, 04:33 UTC, near Barnard's Star. The orange line is where SPHEREx flagged a satellite and set the pixels aside.</p>
 </header>
 
-<section class="controls">
+<!-- ============ THE REVEAL ============ -->
+<section class="reveal" id="reveal">
+  <div class="reveal-head">
+    <h2>One streak, start to finish</h2>
+    <div class="scene-nav" id="sceneNav" role="tablist" aria-label="Steps"></div>
+  </div>
+
+  <div class="scene-grid">
+    <div class="stage-box" id="stageBox">
+      <!-- scene 1: full exposure -->
+      <figure class="scene" data-scene="0">
+        <img src="static/img/d1b669467802_s0_full.png" alt="Whole SPHEREx exposure with the flagged satellite streak in orange">
+        <figcaption>3.5° of sky — seven full Moons across. 115 seconds. One flagged streak.</figcaption>
+      </figure>
+      <!-- scene 2: the two cameras -->
+      <figure class="scene compare" data-scene="1">
+        <div class="cmp" id="cmp">
+          <img class="cmp-under" src="static/img/d1b669467802_s0_long.png" alt="The same patch in the 4.7 micron camera: the streak is bright">
+          <img class="cmp-over" id="cmpOver" src="static/img/d1b669467802_s0_short.png" alt="The patch in the 2.0 micron camera: the streak is barely visible">
+          <div class="cmp-handle" id="cmpHandle"><span></span></div>
+          <div class="cmp-tag cold">2.0 µm · reflected sunlight</div>
+          <div class="cmp-tag hot">4.7 µm · heat</div>
+        </div>
+        <input id="cmpRange" class="cmp-range" type="range" min="0" max="100" value="50" aria-label="Slide between the two cameras">
+        <figcaption>Same instant, same sky, two cameras. Drag.</figcaption>
+      </figure>
+      <!-- scene 3: spectrum -->
+      <figure class="scene" data-scene="2">
+        <canvas id="specCanvas" width="900" height="820"></canvas>
+        <figcaption>Brightness of the streak's edges, both cameras. Dashed: what sunlight alone would give. Amber: a body at <span id="specT">—</span>.</figcaption>
+      </figure>
+      <!-- scene 4: geometry -->
+      <figure class="scene" data-scene="3">
+        <canvas id="geoCanvas" width="900" height="820"></canvas>
+        <figcaption>To scale. SPHEREx's position comes from the image header; the object's from its published orbit.</figcaption>
+      </figure>
+    </div>
+
+    <div class="scene-copy">
+      <div class="copy" data-scene="0">
+        <p class="step">Step 1 of 4</p>
+        <h3>The pixels nobody wants</h3>
+        <p>SPHEREx photographs the whole sky every six months in 102 infrared colours. In <strong>73% of its exposures</strong> a satellite crosses the field. The pipeline marks the streak with a flag and scientists mask it out. Those pixels are, officially, waste.</p>
+      </div>
+      <div class="copy" data-scene="1">
+        <p class="step">Step 2 of 4</p>
+        <h3>Two cameras, one instant</h3>
+        <p>Behind the telescope a dichroic mirror sends short wavelengths to one camera and long wavelengths to another. Every streak is therefore recorded twice, at the same moment. In reflected sunlight it is faint. In heat it blazes.</p>
+        <p class="numbers"><span><b>0.25×</b> the 1,068 stars in the same image, long camera over short</span><span><b>58×</b> the streak</span></p>
+      </div>
+      <div class="copy" data-scene="2">
+        <p class="step">Step 3 of 4</p>
+        <h3>It glows with its own heat</h3>
+        <p>Light leaks out either side of the masked core. We measure it, calibrate it against the stars, and fit the long-wavelength slope. The object is not just reflecting the Sun. It is warm.</p>
+        <p class="bignum"><span id="bigT">—</span><small id="bigTsub"></small></p>
+      </div>
+      <div class="copy" data-scene="3">
+        <p class="step">Step 4 of 4</p>
+        <h3>And it has a name</h3>
+        <p>The image header records where SPHEREx was at the start, middle and end of the exposure. We propagated all 31,500 catalogued objects across those 115 seconds. Exactly one track lies on the streak and moves the same way.</p>
+        <p class="satline"><b>H-1 rocket body (MABES)</b> — a Japanese upper stage launched in 1986. NORAD 16910. 987 km from the telescope, 1,508 km above the Earth. It crossed at 04:34:14 UTC, in 4.4 seconds. SPHEREx's own “first half of the exposure” flag agrees.</p>
+      </div>
+      <div class="scene-controls">
+        <button id="sceneBack" class="btn small" aria-label="Previous step">←</button>
+        <button id="sceneNext" class="btn small primary">Next</button>
+        <button id="scenePlay" class="btn small ghost">Pause</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="second-sat" id="secondSat">
+    <h3>It is not a one-off</h3>
+    <p>The next night's exposure caught another. Same method, same controls, a different answer.</p>
+    <div class="sat-row">
+      <img src="static/img/81cb623bc5f3_s0_long.png" alt="Second satellite streak in the heat camera">
+      <div>
+        <p class="satline"><b>COSMOS 1980</b> — Soviet satellite, 1988. NORAD 19649.</p>
+        <p class="numbers"><span><b>294 K</b> (278–311)</span><span><b>226 km</b> from SPHEREx</span><span><b>28×</b> stars: 0.24×</span><span><b>0.8 s</b> to cross</span></p>
+        <p class="small">Both temperatures sit where NASA Ames's thermal model of satellites in SPHEREx data puts them, around 280 K (Borlaff et al. 2026). Nobody had measured one from this telescope before.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ EXPLORE ============ -->
+<section class="explore" id="explore">
+  <div class="explore-head">
+    <h2>Now your turn: any patch of sky, over time</h2>
+    <p>Pick a target or type coordinates. SkyShift collects every SPHEREx exposure of that spot, lines them up north-up on one brightness scale, and plays the six-monthly sky passes. The link in your address bar always reproduces the view.</p>
+  </div>
+
   <div class="targets" id="targets"></div>
+
   <form id="coordForm" class="coords">
-    <label>RA (deg) <input id="ra" type="number" step="any" required></label>
-    <label>Dec (deg) <input id="dec" type="number" step="any" required></label>
-    <label>Field <select id="fov">
+    <label>Right ascension (°)<input id="ra" type="number" step="any" required placeholder="269.4462"></label>
+    <label>Declination (°)<input id="dec" type="number" step="any" required placeholder="4.7690"></label>
+    <label>Field<select id="fov">
       <option value="0.06">3.6′</option>
       <option value="0.12" selected>7′</option>
       <option value="0.2">12′</option>
     </select></label>
-    <button type="submit">Show</button>
-    <button type="button" id="shareBtn" class="ghost" title="Copy a link to this view">Share link</button>
+    <button type="submit" class="btn primary">Show this sky</button>
+    <button type="button" id="shareBtn" class="btn ghost">Copy link</button>
   </form>
+
+  <div class="explore-grid">
+    <div class="viewer">
+      <div class="viewer-head">
+        <h3 id="title">Choose a target</h3>
+        <div id="status" class="status"></div>
+      </div>
+      <div class="modes">
+        <div class="seg" id="modeSeg">
+          <button data-mode="color" class="on">Colour</button>
+          <button data-mode="stacks">One band</button>
+          <button data-mode="diffs">What changed</button>
+          <button data-mode="frames">Every exposure</button>
+        </div>
+        <div class="seg" id="detSeg"></div>
+      </div>
+      <div class="stage">
+        <img id="frameA" alt="" />
+        <img id="frameB" alt="" />
+        <div class="cross"></div>
+        <div id="empty" class="empty">Pick a target above or enter coordinates.</div>
+      </div>
+      <div class="timeline" id="timeline"></div>
+      <div class="player">
+        <button id="playBtn" class="btn primary">Play</button>
+        <button id="prevBtn" class="btn" aria-label="Previous frame">←</button>
+        <button id="nextBtn" class="btn" aria-label="Next frame">→</button>
+        <label class="speed">Speed<input id="speed" type="range" min="200" max="2000" value="900" step="100"></label>
+        <span id="frameInfo" class="info"></span>
+      </div>
+      <p class="hint" id="modeHint"></p>
+      <div id="exposureTools" class="exposure-tools" hidden>
+        <button id="findSatBtn" class="btn">Find satellites in this exposure</button>
+        <span class="small">Downloads the full exposure from NASA. About a minute the first time.</span>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div id="aladin"></div>
+      <p class="small map-note">Where you are looking, on NASA's AllWISE sky. The box is the field above; a red line is a measured streak.</p>
+      <div id="cards"></div>
+    </aside>
+  </div>
 </section>
 
-<main>
-  <section class="viewer">
-    <div class="viewer-head">
-      <h2 id="title">Choose a target</h2>
-      <div id="status" class="status"></div>
+<!-- ============ METHOD ============ -->
+<section class="method" id="method">
+  <h2>How it works, and what it cannot do</h2>
+  <div class="method-grid">
+    <div>
+      <h3>Flipbook</h3>
+      <p>Every SPHEREx exposure covering the position is found through NASA/IPAC IRSA, cut out, reprojected to one north-up grid and grouped into sky passes. All images of one band share one brightness scale, so a change you see is real. <em>What changed</em> subtracts one pass from the next: a moving star becomes a blue–amber pair, a variable star brightens or fades.</p>
     </div>
-    <div class="modes">
-      <div class="seg" id="modeSeg">
-        <button data-mode="color" class="on" title="Three infrared colours at once">Colour</button>
-        <button data-mode="stacks">One band</button>
-        <button data-mode="diffs">Difference</button>
-        <button data-mode="frames">All exposures</button>
-      </div>
-      <div class="seg" id="detSeg"></div>
+    <div>
+      <h3>Temperature</h3>
+      <p>The flagged core of a streak is unusable; its edges are not. We measure the edge light in both cameras of a detector pair, scale it with the stars in the same frames, and fit a blackbody to the 4.4–5.0 µm slope with a bootstrap range. Ratios depend on the method by ±30%; the temperature is far more stable, so we show ratios as indicative and temperatures with ranges.</p>
     </div>
-    <div class="stage">
-      <img id="frame" alt="SPHEREx image" />
-      <div class="cross"></div>
-      <div id="empty" class="empty">Pick a target or enter coordinates.</div>
+    <div>
+      <h3>Name</h3>
+      <p>SPHEREx's position at the start, middle and end of each exposure is in the file header. We propagate the public satellite catalogue (Space-Track elements, SGP4) across the exposure and keep an object only if its apparent track lies on the streak and runs the same way. Both showcase streaks matched exactly one object. Orbit data for the exposure date is required and cannot be redistributed, so live naming depends on the server's orbit file.</p>
     </div>
-    <div class="player">
-      <button id="playBtn">▶ Play</button>
-      <button id="prevBtn" aria-label="Previous frame">◀</button>
-      <button id="nextBtn" aria-label="Next frame">▶</button>
-      <label>Speed <input id="speed" type="range" min="200" max="2000" value="900" step="100"></label>
-      <span id="frameInfo" class="info"></span>
+    <div>
+      <h3>Limits</h3>
+      <p>One temperature is an average over the visible surface; size and emissivity cannot be separated. Naming only works for catalogued objects. The temperature needs the long-wavelength cameras (D5/D6) to see the streak. Each streak crosses one detector pair, so a single satellite yields two of the six bands, not a full spectrum.</p>
     </div>
-    <p class="hint" id="modeHint"></p>
-    <div id="exposureTools" class="exposure-tools" hidden>
-      <button id="findSatBtn">Find satellites in this exposure</button>
-      <span class="small">Downloads the full exposure from NASA (about 1 minute the first time).</span>
-    </div>
-  </section>
-
-  <aside class="side">
-    <div id="aladin"></div>
-    <h3>What crossed the sky</h3>
-    <p class="small">SPHEREx's pipeline flags satellite streaks as unusable. Each streak is recorded by two cameras at the same moment; we recover the light at its edges and compare the cameras. Stars in the same images are the control.</p>
-    <div id="cards"></div>
-  </aside>
-</main>
+  </div>
+  <div class="sources">
+    <p><strong>Data.</strong> SPHEREx Level 2 spectral images, DR1 and Quick Release 3, from the NASA/IPAC Infrared Science Archive (IRSA), via the SIA2 and cutout services. Sky-map background: AllWISE (NASA WISE) served by CDS. Satellite orbits: Space-Track.org, under its user agreement, not redistributed.</p>
+    <p><strong>Software.</strong> Aladin Lite v3 (CDS, GPL-3.0); Astropy, reproject, NumPy, SciPy (BSD-3); FastAPI, Uvicorn, sgp4, Skyfield (MIT); Pillow (MIT-CMU). Our code: MIT.</p>
+    <p><strong>References.</strong> Akeson et al. 2025, the SPHEREx processing pipeline, and the SPHEREx Explanatory Supplement. Borlaff et al. 2026 (arXiv:2605.27501), satellite trails in SPHEREx exposures and the ~280 K thermal prediction.</p>
+    <p><strong>AI.</strong> An AI assistant (Claude, Anthropic) helped with research, code and text. Every number on this page was computed from SPHEREx data and checked by the team against controls. No image is AI-generated.</p>
+    <p class="small">"This publication makes use of data products from the Spectro-Photometer for the History of the Universe, Epoch of Reionization and Ices Explorer (SPHEREx), which is a joint project of the Jet Propulsion Laboratory and the California Institute of Technology, and is funded by the National Aeronautics and Space Administration."</p>
+  </div>
+</section>
 
 <footer>
-  Data: NASA SPHEREx (DR1, QR3) via NASA/IPAC Infrared Science Archive. Satellite orbits: Space-Track.org. Sky map: Aladin Lite (CDS), AllWISE.
-  NASA Space Apps Challenge 2026 · Planet X and SPHEREx ·
-  <a href="https://github.com/ayoubna99/spherex-skyshift#readme" target="_blank" rel="noopener">How it works, sources and code</a>
+  SkyShift — Ayoub (data, backend), Abdou (frontend), Ilyes (video). NASA Space Apps Challenge 2026.
+  <a href="https://github.com/ayoubna99/spherex-skyshift" target="_blank" rel="noopener">Source code</a>
 </footer>
 
 <script>
-  // Backend URL for live searches. Demo targets and the showcase work without it (static/).
   window.SKYSHIFT_API = window.SKYSHIFT_API || "http://localhost:8000";
 </script>
 <script type="module">
-  // Aladin Lite v3 (CDS, GPL-3.0), served from this site so the map does not depend on a CDN
   import A from "./aladin.js";
   window.A = A;
   window.dispatchEvent(new Event("aladin-ready"));
