@@ -72,8 +72,11 @@ Optional, for satellite names: download 3-line elements for the exposure dates f
 (class `gp_history`) and set `SKYSHIFT_TLE=/path/to/file.txt` (or put it in `backend/data/`).
 The file is not in this repository: Space-Track data may not be redistributed.
 
-Deploy: the `Dockerfile` runs on Google Cloud Run (2 GiB memory recommended; one streak analysis
-peaks around 0.8 GB). The frontend is plain static files.
+Deploy: the backend runs on Render's free plan (build `pip install -r requirements.txt`, start
+`uvicorn backend.app:app --host 0.0.0.0 --port $PORT`). One streak analysis peaks around 350 MB
+without the orbit file, ~600 MB with it, so naming in the live API needs a bigger instance; the
+`Dockerfile` works on any container host. The frontend is plain static files; the demo targets and
+showcase are pre-rendered in `frontend/static/` and need no backend.
 
 ## Data, tools and licenses
 

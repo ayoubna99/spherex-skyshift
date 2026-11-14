@@ -64,14 +64,14 @@ class Exposure:
             self.img = h["IMAGE"].data.astype(np.float32)
             if "ZODI" in h:
                 self.img -= h["ZODI"].data
-            self.flags = h["FLAGS"].data.astype(np.int64)  # bit 29 needs > int16; kept simple
+            self.flags = h["FLAGS"].data.astype(np.int32)  # highest bit used is 29
             self.wcs = WCS(hdr)
             self.wave = WCS(hdr, fobj=h, key="W")
             self.date = hdr.get("DATE-OBS")
             self.det = hdr.get("DETECTOR")
             self.eph = {k: hdr.get(k) for k in identify.EPH_KEYS}
         self.ny, self.nx = self.img.shape
-        self.Y, self.X = np.mgrid[0:self.ny, 0:self.nx].astype(np.float32)
+        self.Y, self.X = np.ogrid[0:self.ny, 0:self.nx]   # broadcastable, no full-size grids
         self._resid = None
 
     @property
