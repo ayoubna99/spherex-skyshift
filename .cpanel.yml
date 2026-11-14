@@ -1,7 +1,7 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/aadvsfmf/skyshift-app/
+    - export DEPLOYPATH=/home/aadvsfmf/spherex-apps/
     - /bin/mkdir -p $DEPLOYPATH/tmp
     - /bin/cp -R backend $DEPLOYPATH
     - /bin/cp passenger_wsgi.py requirements.txt $DEPLOYPATH
