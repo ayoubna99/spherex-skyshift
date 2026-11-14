@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SkyShift — what moved through your patch of sky?</title>
+  <meta name="description" content="Explore NASA SPHEREx images over time: moving stars, variable stars, and the satellites crossing the data, with their temperatures.">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>SkyShift</h1>
+    <p>Point at any patch of sky and see what moved through it in NASA SPHEREx images — stars, and the satellites crossing the data, with how hot they are.</p>
+  </div>
+</header>
+
+<section class="controls">
+  <div class="targets" id="targets"></div>
+  <form id="coordForm" class="coords">
+    <label>RA (deg) <input id="ra" type="number" step="any" required></label>
+    <label>Dec (deg) <input id="dec" type="number" step="any" required></label>
+    <label>Field <select id="fov">
+      <option value="0.06">3.6′</option>
+      <option value="0.12" selected>7′</option>
+      <option value="0.2">12′</option>
+    </select></label>
+    <button type="submit">Show</button>
+    <button type="button" id="shareBtn" class="ghost" title="Copy a link to this view">Share link</button>
+  </form>
+</section>
+
+<main>
+  <section class="viewer">
+    <div class="viewer-head">
+      <h2 id="title">Choose a target</h2>
+      <div id="status" class="status"></div>
+    </div>
+    <div class="modes">
+      <div class="seg" id="modeSeg">
+        <button data-mode="stacks" class="on">Flipbook</button>
+        <button data-mode="diffs">Difference</button>
+        <button data-mode="frames">All exposures</button>
+      </div>
+      <div class="seg" id="detSeg"></div>
+    </div>
+    <div class="stage">
+      <img id="frame" alt="SPHEREx image" />
+      <div class="cross"></div>
+      <div id="empty" class="empty">Pick a target or enter coordinates.</div>
+    </div>
+    <div class="player">
+      <button id="playBtn">▶ Play</button>
+      <button id="prevBtn">◀</button>
+      <button id="nextBtn">▶</button>
+      <label>Speed <input id="speed" type="range" min="200" max="2000" value="900" step="100"></label>
+      <span id="frameInfo" class="info"></span>
+    </div>
+    <p class="hint" id="modeHint"></p>
+    <div id="exposureTools" class="exposure-tools" hidden>
+      <button id="findSatBtn">Find satellites in this exposure</button>
+      <span class="small">Downloads the full exposure from NASA (about 1 minute the first time).</span>
+    </div>
+  </section>
+
+  <aside class="side">
+    <div id="aladin"></div>
+    <h3>What crossed the sky</h3>
+    <p class="small">SPHEREx's pipeline flags satellite streaks as unusable. Each streak is recorded by two cameras at the same moment; we recover the light at its edges and compare the cameras. Stars in the same images are the control.</p>
+    <div id="cards"></div>
+  </aside>
+</main>
+
+<footer>
+  Data: NASA SPHEREx (DR1, QR3) via NASA/IPAC Infrared Science Archive. Sky map: Aladin Lite (CDS). NASA Space Apps Challenge 2026 · Planet X and SPHEREx.
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
