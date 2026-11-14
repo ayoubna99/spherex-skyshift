@@ -283,6 +283,7 @@ async function loadView(v) {
     status(`RA ${d.target.ra.toFixed(4)}°, Dec ${d.target.dec.toFixed(4)}°, field ${(d.target.size_deg * 60).toFixed(1)}′`);
     mapGoto(d.target.ra, d.target.dec, d.target.size_deg);
     buildDetButtons(); rebuildList(); show(0); syncURL();
+    if ($("gaiaToggle").checked) $("gaiaToggle").onchange({ target: $("gaiaToggle") });
     if (!REDUCED) play();
   } catch (e) {
     const msg = offline(e) ? "The live server is not reachable right now (it may be waking up). Try again in a minute, or pick one of the ready-made targets." : "Something went wrong: " + e.message;
@@ -411,6 +412,48 @@ function card(c, base) {
   setTimeout(() => { drawSpectrum(el.querySelector("canvas"), c); if (sat) drawGeometry(el.querySelector("canvas.geo"), sat); }, 0);
   return el;
 }
+
+// ---- "above your city": the zenith right now, as RA/Dec
+const CITIES = [
+  ["Algiers", 36.75, 3.06], ["Boston", 42.36, -71.06], ["Berlin", 52.52, 13.41], ["Paris", 48.86, 2.35], ["London", 51.51, -0.13],
+  ["Cairo", 30.04, 31.24], ["Lagos", 6.52, 3.38], ["Nairobi", -1.29, 36.82], ["Tokyo", 35.68, 139.69], ["Delhi", 28.61, 77.21],
+  ["Sydney", -33.87, 151.21], ["São Paulo", -23.55, -46.63], ["Mexico City", 19.43, -99.13], ["Los Angeles", 34.05, -118.24], ["Pasadena (JPL)", 34.15, -118.14],
+];
+function zenithNow(lat, lon) {
+  // Greenwich mean sidereal time (Meeus), then local sidereal time = RA of the zenith; Dec = latitude
+  const jd = Date.now() / 86400000 + 2440587.5, T = (jd - 2451545) / 36525;
+  let gmst = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T - T * T * T / 38710000;
+  const ra = (((gmst + lon) % 360) + 360) % 360;
+  return { ra: +ra.toFixed(4), dec: +lat.toFixed(4) };
+}
+function loadOverhead(lat, lon, place) {
+  const z = zenithNow(lat, lon);
+  status(`Straight above ${place} right now: RA ${z.ra}°, Dec ${z.dec}°.`);
+  loadView({ ra: z.ra, dec: z.dec, fov: 0.12 });
+}
+CITIES.forEach(([n, la, lo]) => { const o = document.createElement("option"); o.value = `${la},${lo}`; o.textContent = n; $("city").appendChild(o); });
+$("city").onchange = (e) => { if (!e.target.value) return; const [la, lo] = e.target.value.split(",").map(Number); loadOverhead(la, lo, e.target.selectedOptions[0].textContent); };
+$("geoBtn").onclick = () => {
+  if (!navigator.geolocation) { $("overheadNote").textContent = "Your browser does not share location. Pick a city instead."; return; }
+  $("geoBtn").disabled = true;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { $("geoBtn").disabled = false; loadOverhead(pos.coords.latitude, pos.coords.longitude, "you"); },
+    () => { $("geoBtn").disabled = false; $("overheadNote").textContent = "Location not shared. Pick a city instead."; },
+    { timeout: 8000 });
+};
+
+// ---- Gaia DR3 overlay on the sky map (CDS VizieR, fetched by Aladin Lite in the browser)
+$("gaiaToggle").onchange = (e) => {
+  if (!S.aladin) return;
+  if (S.gaia) { S.aladin.removeLayer(S.gaia); S.gaia = null; }
+  if (e.target.checked && S.data) {
+    try {
+      S.gaia = A.catalogFromVizieR("I/355/gaiadr3", `${S.data.target.ra} ${S.data.target.dec}`, Math.max(S.data.target.size_deg, 0.1),
+        { name: "Gaia DR3", color: COLD, shape: "circle", sourceSize: 10, onClick: "showPopup", limit: 2000 });
+      S.aladin.addCatalog(S.gaia);
+    } catch (err) { status("Gaia overlay failed: " + err.message); e.target.checked = false; }
+  }
+};
 
 // ---- wiring
 $("modeSeg").onclick = (e) => { if (e.target.dataset.mode) { S.mode = e.target.dataset.mode; rebuildList(); show(0); syncURL(); } };

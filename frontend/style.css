@@ -176,6 +176,15 @@ input, select { background: var(--panel); color: var(--ink); border: 1px solid v
 footer { max-width: var(--wrap); margin: 0 auto; padding: 20px 32px 48px; color: var(--muted); font-size: 13px; }
 footer a { margin-left: 10px; }
 
+/* ---------- overhead and map tools */
+.explore > .overhead { max-width: calc(var(--wrap) - 64px); margin: 6px auto 22px; padding: 16px 18px; border: 1px dashed var(--line2); border-radius: 14px; }
+.overhead p { margin: 0 0 10px; color: #c8d1e0; }
+.overhead-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.overhead-row select { width: 220px; }
+.map-tools { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 8px; }
+.check { display: flex; flex-direction: row; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink); }
+.check input { width: auto; accent-color: var(--hot); }
+
 /* ---------- responsive */
 @media (max-width: 960px) {
   .scene-grid, .explore-grid, .method-grid { grid-template-columns: 1fr; }
@@ -186,6 +195,7 @@ footer a { margin-left: 10px; }
   .hero-caption { position: static; max-width: none; text-align: left; margin-top: 28px; }
   .top .links { display: none; }
   .reveal, .method, .explore > * { padding-left: 20px; padding-right: 20px; }
+  .explore > .overhead { max-width: none; margin-left: 20px; margin-right: 20px; padding: 14px 16px; }
   .scene-copy { min-height: 0; }
 }
 @media (max-width: 600px) {
