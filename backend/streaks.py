@@ -24,7 +24,7 @@ from PIL import Image
 from scipy import ndimage
 from scipy.optimize import curve_fit
 
-from . import spherex
+from . import identify, spherex
 
 astropy_log.setLevel("ERROR")
 warnings.simplefilter("ignore", FITSFixedWarning)
@@ -69,6 +69,7 @@ class Exposure:
             self.wave = WCS(hdr, fobj=h, key="W")
             self.date = hdr.get("DATE-OBS")
             self.det = hdr.get("DETECTOR")
+            self.eph = {k: hdr.get(k) for k in identify.EPH_KEYS}
         self.ny, self.nx = self.img.shape
         self.Y, self.X = np.mgrid[0:self.ny, 0:self.nx]
         self._resid = None
@@ -326,13 +327,27 @@ def crop_png(exp, L, name, half=60):
     return f"img/{name}"
 
 
+# ---------------------------------------------------------------- satellite naming
+def _name_it(eph, line_sky):
+    """Match the streak against the satellite catalogue (only if an orbit file is installed)."""
+    try:
+        cands = identify.identify(eph, line_sky)
+    except Exception as e:                           # naming is a bonus; never break the measurement
+        print("identify failed:", e)
+        cands = []
+    best = cands[0] if cands else None
+    return {"satellite": best, "satellite_candidates": cands,
+            "distance_km": best["distance_km"] if best else None,
+            "catalog_checked": identify.tle_path() is not None}
+
+
 # ---------------------------------------------------------------- main entry
 def analyse(url, det):
     """Find and measure every satellite streak in one exposure pair. Cached per exposure."""
     other = PAIR[det]
     s_det, l_det = min(det, other), max(det, other)
     urls = {det: url, other: partner_url(url, det, other)}
-    key = hashlib.md5(f"v2|{urls[s_det]}".encode()).hexdigest()[:12]
+    key = hashlib.md5(f"v3|{urls[s_det]}".encode()).hexdigest()[:12]
     cache = spherex.CACHE / f"streaks_{key}.json"
     if cache.exists():
         return json.loads(cache.read_text())
@@ -408,7 +423,7 @@ def analyse(url, det):
             "png_short": crop_png(short, Ls, f"{sid}_short.png"),
             "png_long": crop_png(long_, res["long"]["L"], f"{sid}_long.png"),
             "time_half_hint": None if frac_first is None else ("first" if frac_first > 0.5 else "second"),
-            "satellite": None, "distance_km": None,
+            **_name_it(short.eph, [[float(ra[0]), float(dec[0])], [float(ra[1]), float(dec[1])]]),
         })
     out = {"key": key, "date": short.date, "mjd": Time(short.date).mjd if short.date else None,
            "detectors": [s_det, l_det], "n_streaks_flagged": len(uniq), "streaks": cards}

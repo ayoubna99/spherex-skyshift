@@ -167,9 +167,17 @@ function card(c) {
   const T = c.temp_k ? `${c.temp_k} K` : "—";
   const range = c.temp_range_k ? `(${c.temp_range_k[0]}–${c.temp_range_k[1]} K)` : "(temperature needs the 3.8–5 µm cameras)";
   const r = (x) => (x == null ? "—" : x >= 10 ? x.toFixed(0) + "×" : x.toFixed(2) + "×");
+  const sat = c.satellite;
+  const who = sat
+    ? `<div class="sat"><span class="satname">${esc(sat.name)}</span>
+         <a href="https://www.n2yo.com/satellite/?s=${encodeURIComponent(sat.norad)}" target="_blank" rel="noopener">NORAD ${esc(sat.norad)}</a>
+         <div class="small">${sat.distance_km.toLocaleString()} km from SPHEREx · orbiting ${sat.altitude_km.toLocaleString()} km up ·
+         crossed the field at ${sat.time_utc.slice(11)} UTC in ${sat.crossing_s} s · track matches the streak to ${sat.offset_deg}°</div></div>`
+    : `<div class="small">${c.catalog_checked ? "Not in the public satellite catalogue (or orbit too uncertain)" : "Satellite not named yet"}</div>`;
   el.innerHTML = `
+    ${who}
     <div><span class="temp">${T}</span> <span class="small">${range} · about ${c.temp_k ? (c.temp_k - 273) + " °C" : "?"}</span></div>
-    <div class="small">${fmtDate(c.date)} · cameras D${c.detectors[0]} + D${c.detectors[1]} · streak ${c.length_deg.toFixed(1)}° long${c.satellite ? " · " + c.satellite : ""}</div>
+    <div class="small">${fmtDate(c.date)} · cameras D${c.detectors[0]} + D${c.detectors[1]} · streak ${c.length_deg.toFixed(1)}° long</div>
     <div class="row">
       <figure><img src="${API}/${c.png_short}"><figcaption>reflected light, ${c.wavelength_short_um.toFixed(1)} µm</figcaption></figure>
       <figure><img src="${API}/${c.png_long}"><figcaption>heat glow, ${c.wavelength_long_um.toFixed(1)} µm</figcaption></figure>
@@ -184,6 +192,7 @@ function card(c) {
   setTimeout(() => drawSpectrum(el.querySelector("canvas"), c), 0);
   return el;
 }
+function esc(t) { return String(t).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m])); }
 function bnu(l, T) { return Math.pow(l, -3) / (Math.exp(14387.77 / (l * T)) - 1); }
 function drawSpectrum(cv, c) {
   const g = cv.getContext("2d"), W = cv.width, H = cv.height, pad = 46;

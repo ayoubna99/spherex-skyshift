@@ -57,3 +57,6 @@ h3 { margin: 16px 0 6px; font-size: 15px; }
 .card td:last-child { text-align: right; }
 footer { padding: 14px 28px 26px; color: var(--muted); font-size: 12px; }
 [hidden] { display: none !important; }
+.sat { margin-bottom: 6px; }
+.satname { font-size: 1.25rem; font-weight: 700; margin-right: 8px; }
+.sat a { color: #8ab4ff; font-size: .85rem; }
