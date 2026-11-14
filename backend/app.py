@@ -2,7 +2,13 @@
 
 Run locally:  uvicorn backend.app:app --reload   (from the repo root)
 """
+import json
+import os
+import threading
+import time
+
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -14,6 +20,39 @@ MID_EPOCH = 2026.37          # decimal year, middle of DR1 + QR3
 app = FastAPI(title="SkyShift API", version="0.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 app.mount("/img", StaticFiles(directory=str(frames.IMG)), name="img")
+
+
+# Long jobs (a new patch of sky: ~1 min; a satellite analysis: ~2 min) run in the background, so no
+# proxy or host timeout can cut the request. The first call answers 202 {"pending": true}; the browser
+# asks again every few seconds until the result is cached. Marker files make this work across the
+# several worker processes a shared host may run.
+JOBS = spherex.CACHE / "jobs"
+JOBS.mkdir(parents=True, exist_ok=True)
+STALE_S = 900
+
+
+def deferred(key, path, fn):
+    if path.exists():
+        return frames.clean(json.loads(path.read_text()))
+    run, err = JOBS / f"{key}.run", JOBS / f"{key}.err"
+    if err.exists():
+        msg = err.read_text()
+        err.unlink(missing_ok=True)
+        raise HTTPException(503, msg or "the NASA archive did not answer; try again")
+    if run.exists() and time.time() - run.stat().st_mtime < STALE_S:
+        return JSONResponse({"pending": True, "since_s": round(time.time() - run.stat().st_mtime)}, 202)
+    run.write_text(str(os.getpid()))
+
+    def work():
+        try:
+            fn()
+        except Exception as e:                      # noqa: BLE001  report any failure to the next poll
+            err.write_text(str(e)[:300])
+        finally:
+            run.unlink(missing_ok=True)
+
+    threading.Thread(target=work, daemon=True).start()
+    return JSONResponse({"pending": True, "since_s": 0}, 202)
 
 
 @app.get("/api/health")
@@ -46,10 +85,8 @@ def get_frames(
         name, size_deg = t["name"], t["size_deg"]
     if ra is None or dec is None:
         raise HTTPException(400, "give ra and dec (degrees) or a target")
-    try:
-        return frames.build(ra, dec, size_deg=size_deg, per_epoch_det=per_epoch, name=name)
-    except RuntimeError as e:
-        raise HTTPException(503, str(e)) from e
+    key, path = frames.result_path(ra, dec, size_deg, per_epoch)
+    return deferred(key, path, lambda: frames.build(ra, dec, size_deg=size_deg, per_epoch_det=per_epoch, name=name))
 
 
 IRSA_PREFIX = "https://irsa.ipac.caltech.edu/ibe/data/spherex/"
@@ -69,10 +106,8 @@ def get_streaks(
     """Find every satellite streak in this exposure and measure it in both cameras (30-90 s first time)."""
     if not url.startswith(IRSA_PREFIX) or not url.endswith(".fits"):
         raise HTTPException(400, "url must be a SPHEREx image URL from IRSA")
-    try:
-        return streaks.analyse(url, det)
-    except RuntimeError as e:
-        raise HTTPException(503, str(e)) from e
+    key, path = streaks.result_path(url, det)
+    return deferred(key, path, lambda: streaks.analyse(url, det))
 
 
 @app.get("/api/gaia")
@@ -98,11 +133,11 @@ def gaia(ra: float = Query(...), dec: float = Query(...), radius_deg: float = Qu
 
 @app.get("/api/showcase")
 def showcase():
-    """Pre-validated satellite streaks for the demo."""
+    """Pre-validated satellite streaks for the demo (the website normally uses its pre-built copy)."""
     out = []
     for s in SHOWCASE:
-        try:
-            out.append(streaks.analyse(s["url"], s["det"]))
-        except RuntimeError:
-            continue
+        r = get_streaks(s["url"], s["det"])
+        if isinstance(r, JSONResponse):
+            return r                                  # still computing
+        out.append(r)
     return out

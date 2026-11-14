@@ -363,13 +363,19 @@ def _name_it(eph, line_sky):
 
 
 # ---------------------------------------------------------------- main entry
+def result_path(url, det):
+    other = PAIR[det]
+    urls = {det: url, other: partner_url(url, det, other)}
+    key = hashlib.md5(f"v4|{urls[min(det, other)]}".encode()).hexdigest()[:12]
+    return key, spherex.CACHE / f"streaks_{key}.json"
+
+
 def analyse(url, det):
     """Find and measure every satellite streak in one exposure pair. Cached per exposure."""
     other = PAIR[det]
     s_det, l_det = min(det, other), max(det, other)
     urls = {det: url, other: partner_url(url, det, other)}
-    key = hashlib.md5(f"v4|{urls[s_det]}".encode()).hexdigest()[:12]
-    cache = spherex.CACHE / f"streaks_{key}.json"
+    key, cache = result_path(url, det)
     if cache.exists():
         return frames.clean(json.loads(cache.read_text()))
 

@@ -28,7 +28,8 @@ def main():
     cached = sorted(frames.spherex.CACHE.glob("result_*.json"), key=lambda f: f.stat().st_mtime)
     for t in targets:
         try:
-            d = A.get_frames(ra=None, dec=None, target=t["key"], size_deg=0.12, per_epoch=2)
+            ra, dec = A.position_at(t["key"], A.MID_EPOCH)
+            d = frames.build(ra, dec, size_deg=t["size_deg"], per_epoch_det=2, name=t["name"])
         except Exception as e:                    # archive busy: fall back to the newest cached build
             print(t["key"], "live build failed, using cache:", e)
             d = next(frames.clean(json.loads(f.read_text())) for f in reversed(cached)
@@ -37,7 +38,7 @@ def main():
         copy_pngs(d)
         (OUT / f"frames_{t['key']}.json").write_text(json.dumps(d, allow_nan=False))
         print(t["key"], len(d["frames"]), "frames")
-    sc = A.showcase()
+    sc = [A.streaks.analyse(x["url"], x["det"]) for x in A.SHOWCASE]
     for r in sc:
         for c in r["streaks"]:
             c.pop("catalog_checked", None)

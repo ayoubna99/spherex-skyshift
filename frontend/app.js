@@ -24,8 +24,19 @@ function staticPath(path) {
   const m = path.match(/^\/api\/frames\?target=([\w-]+)$/);
   return m ? `static/frames_${m[1]}.json` : null;
 }
+const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 async function fetchJSON(url, base) {
-  const r = await fetch(url);
+  // long jobs answer 202 {pending} and run on the server; ask again until the result is ready
+  let r, tries = 0;
+  for (;;) {
+    try { r = await fetch(url); }
+    catch (e) { if (base !== "static" && tries++ < 4) { await sleep(5000); continue; } throw e; }
+    if (r.status !== 202) break;
+    const p = await r.json().catch(() => ({}));
+    if (typeof S !== "undefined" && S.onPending) S.onPending(p.since_s || 0);
+    if (tries++ > 120) throw new Error("the server is still working on this; try again in a minute");
+    await sleep(4000);
+  }
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   const d = await r.json();
   (Array.isArray(d) ? d : [d]).forEach((x) => { if (x && typeof x === "object") x._base = base; });
@@ -450,6 +461,7 @@ async function loadView(v) {
   const q = v.target ? `target=${v.target}` : `ra=${v.ra}&dec=${v.dec}&size_deg=${v.fov}`;
   $("title").textContent = "Loading…"; $("empty").hidden = false; $("empty").textContent = "Fetching SPHEREx images from NASA…";
   status("A new position takes 1–3 minutes the first time; after that it is instant.", true);
+  S.onPending = (t) => { $("empty").textContent = `Fetching SPHEREx images from NASA… ${t} s (usually about a minute)`; };
   document.querySelector(".explore-grid").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "start" });
   try {
     const d = await api("/api/frames?" + q);
@@ -544,6 +556,7 @@ async function findSatellites() {
   if (!it || !it.url) return;
   $("findSatBtn").disabled = true;
   status("Analysing the full exposure in both cameras…", true);
+  S.onPending = (t) => status(`Analysing the full exposure in both cameras… ${t} s (about 2 minutes the first time)`, true);
   try {
     const r = await api(`/api/streaks?url=${encodeURIComponent(it.url)}&det=${it.detector}`);
     renderCards([r], `Exposure ${it.obs_id}, ${fmtDate(it.date)}`);

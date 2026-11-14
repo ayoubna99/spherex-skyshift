@@ -190,10 +190,14 @@ def clean(x):
     return x
 
 
-def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name=None):
+def result_path(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6)):
     key = hashlib.md5(f"v6|{ra:.5f}|{dec:.5f}|{size_deg:.4f}|{per_epoch_det}|{dets}|{spherex.COLLECTIONS}"
                       .encode()).hexdigest()[:12]
-    cached = spherex.CACHE / f"result_{key}.json"
+    return key, spherex.CACHE / f"result_{key}.json"
+
+
+def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name=None):
+    key, cached = result_path(ra, dec, size_deg, per_epoch_det, dets)
     if cached.exists():
         return clean(json.loads(cached.read_text()))
 
