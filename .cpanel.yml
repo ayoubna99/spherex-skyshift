@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/aadvsfmf/skyshift-app/
+    - /bin/mkdir -p $DEPLOYPATH/tmp
+    - /bin/cp -R backend $DEPLOYPATH
+    - /bin/cp passenger_wsgi.py requirements.txt $DEPLOYPATH
+    - /bin/touch $DEPLOYPATH/tmp/restart.txt
