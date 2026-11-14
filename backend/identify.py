@@ -9,6 +9,7 @@ the direction from SPHEREx to the object and keep objects whose apparent track l
 great circle and runs inside the streak's extent. Distance = |object - SPHEREx| at that moment.
 """
 import glob
+import gzip
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -27,19 +28,20 @@ def tle_path():
     p = os.environ.get("SKYSHIFT_TLE")
     if p and Path(p).exists():
         return p
-    files = sorted(glob.glob(str(DATA / "orbits*.txt")))
+    files = sorted(glob.glob(str(DATA / "orbits*.txt")) + glob.glob(str(DATA / "orbits*.txt.gz")))
     return files[-1] if files else None
 
 
 _JAN1 = {}
-CHUNK = 1500
+CHUNK = 400
 
 
 @lru_cache(maxsize=2)
 def load_catalog(path):
     """Parse a 3LE file. Returns {norad: [(epoch_mjd, name, l1, l2), ...]}."""
     cat = {}
-    with open(path) as f:
+    opener = gzip.open if str(path).endswith(".gz") else open
+    with opener(path, "rt") as f:
         lines = [l.rstrip("\n") for l in f if l.strip()]
     i = 0
     while i + 2 < len(lines):

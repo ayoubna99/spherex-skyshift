@@ -24,3 +24,5 @@ orbits*.txt
 # Node (if used)
 node_modules/
 backend/cache/
+orbits*.txt.gz
+backend/data/

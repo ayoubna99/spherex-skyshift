@@ -4,11 +4,12 @@ const API = (params.get("api") || window.SKYSHIFT_API || "http://localhost:8000"
 
 const BANDS = { 1: "0.75–1.09 µm", 2: "1.10–1.62 µm", 3: "1.63–2.41 µm", 4: "2.42–3.82 µm", 5: "3.83–4.41 µm", 6: "4.42–5.00 µm" };
 const MODE_HINT = {
+  color: "Each image is one SPHEREx sky pass (about every 6 months). False colour: 4.7 µm infrared → red, 2 µm → green, 0.9 µm → blue. Cool things look red, hot stars blue-white.",
   stacks: "Each image is one SPHEREx sky pass (about every 6 months), stacked for clarity. Same brightness scale throughout, so changes are real. The target is at the centre marks.",
   diffs: "Later pass minus earlier pass. Orange = brighter now, blue = brighter before. A moving star shows up as a blue–orange pair.",
   frames: "Every single exposure, in time order. Pick one and ask which satellites crossed it.",
 };
-const S = { data: null, mode: "stacks", det: 1, list: [], i: 0, timer: null, view: null, aladin: null };
+const S = { data: null, mode: "color", det: 1, list: [], i: 0, timer: null, view: null, aladin: null };
 const $ = (id) => document.getElementById(id);
 
 // ---------- helpers
@@ -72,22 +73,25 @@ function syncURL() {
 
 // ---------- sky map
 function initAladin() {
-  if (!window.A) return;
+  if (!window.A || S.aladinStarted) return;
+  S.aladinStarted = true;
   A.init.then(() => {
-    S.aladin = A.aladin("#aladin", { survey: "P/allWISE/color", fov: 0.5, showReticle: true, showLayersControl: false, showGotoControl: false, showFullscreenControl: false });
+    S.aladin = A.aladin("#aladin", { survey: "P/allWISE/color", fov: 0.5, showReticle: true, showLayersControl: false, showGotoControl: false, showFullscreenControl: false, showFrame: false, showCooGrid: false });
     S.overlay = A.graphicOverlay({ color: "#ffb347", lineWidth: 2 });
     S.aladin.addOverlay(S.overlay);
-  });
+    if (S.pendingMap) S.pendingMap();
+  }).catch(() => { $("aladin").hidden = true; });           // no WebGL2: hide the map
 }
+window.addEventListener("aladin-ready", initAladin);
 function mapGoto(ra, dec, fovDeg) {
-  if (!S.aladin) return;
+  if (!S.aladin) { S.pendingMap = () => mapGoto(ra, dec, fovDeg); return; }
   S.aladin.gotoRaDec(ra, dec); S.aladin.setFoV(Math.max(fovDeg * 3, 0.3));
   S.overlay.removeAll();
   const h = fovDeg / 2, c = Math.cos(dec * Math.PI / 180);
   S.overlay.add(A.polyline([[ra - h / c, dec - h], [ra + h / c, dec - h], [ra + h / c, dec + h], [ra - h / c, dec + h], [ra - h / c, dec - h]]));
 }
 function mapStreak(line) {
-  if (!S.aladin) return;
+  if (!S.aladin) { S.pendingMap = () => mapStreak(line); return; }
   S.overlay.add(A.polyline(line, { color: "#ff5f5f", lineWidth: 3 }));
   const ra = (line[0][0] + line[1][0]) / 2, dec = (line[0][1] + line[1][1]) / 2;
   S.aladin.gotoRaDec(ra, dec); S.aladin.setFoV(4.5);
@@ -103,6 +107,7 @@ async function loadView(v) {
   try {
     const d = await api("/api/frames?" + q);
     S.data = d;
+    if (S.mode === "color" && !(d.color || []).length) S.mode = "stacks";
     $("title").textContent = `${d.target.name || "Custom position"} · ${d.n_epochs} sky passes · ${d.frames.length} exposures`;
     $("ra").value = d.target.ra; $("dec").value = d.target.dec;
     status(`RA ${d.target.ra.toFixed(4)}°, Dec ${d.target.dec.toFixed(4)}° · field ${(d.target.size_deg * 60).toFixed(1)}′`);
@@ -132,11 +137,14 @@ function rebuildList() {
   [...$("modeSeg").children].forEach((b) => b.classList.toggle("on", b.dataset.mode === S.mode));
   $("modeHint").textContent = MODE_HINT[S.mode];
   $("exposureTools").hidden = S.mode !== "frames";
-  if (S.mode === "stacks") S.list = S.data.stacks.filter((s) => s.detector === S.det);
+  $("detSeg").classList.toggle("off", S.mode === "color");
+  if (S.mode === "color") S.list = S.data.color || [];
+  else if (S.mode === "stacks") S.list = S.data.stacks.filter((s) => s.detector === S.det);
   else if (S.mode === "diffs") S.list = S.data.diffs.filter((s) => s.detector === S.det);
   else S.list = S.data.frames.filter((s) => s.detector === S.det).sort((a, b) => a.mjd - b.mjd);
 }
 function label(item) {
+  if (S.mode === "color") return `Pass ${item.epoch + 1} · ${item.date} · colour from D${item.detectors.join(" + D")} · ${item.n_frames} exposure(s)${item.streak ? " · 🛰 streak flagged" : ""}`;
   if (S.mode === "stacks") return `Pass ${item.epoch + 1} · ${item.date} · ${item.band} · ${item.n_frames} exposure(s)${item.streak ? " · 🛰 streak flagged" : ""}`;
   if (S.mode === "diffs") {
     const a = S.data.stacks.find((s) => s.epoch === item.from_epoch && s.detector === item.detector);
@@ -199,10 +207,15 @@ function card(c, base) {
          <div class="small">${sat.distance_km.toLocaleString()} km from SPHEREx · orbiting ${sat.altitude_km.toLocaleString()} km up ·
          crossed the field at ${sat.time_utc.slice(11)} UTC in ${sat.crossing_s} s · track matches the streak to ${sat.offset_deg}°</div></div>`
     : `<div class="small">${c.catalog_checked ? "Not in the public satellite catalogue (or orbit too uncertain)" : "Satellite not named yet"}</div>`;
+  const full = c.png_full
+    ? `<figure class="full"><img src="${imgURL(base, c.png_full)}" alt="Whole SPHEREx exposure with the satellite streak">
+         <figcaption>The whole SPHEREx exposure, 3.5° across (seven full Moons). Orange: the pixels SPHEREx flagged as a satellite and set aside${sat ? " — that line is " + esc(sat.name) : ""}.</figcaption></figure>`
+    : "";
   el.innerHTML = `
     ${who}
     <div><span class="temp">${T}</span> <span class="small">${range} · about ${c.temp_k ? (c.temp_k - 273) + " °C" : "?"}</span></div>
     <div class="small">${fmtDate(c.date)} · cameras D${c.detectors[0]} + D${c.detectors[1]} · streak ${c.length_deg.toFixed(1)}° long</div>
+    ${full}
     <div class="row">
       <figure><img src="${imgURL(base, c.png_short)}"><figcaption>reflected light, ${c.wavelength_short_um.toFixed(1)} µm</figcaption></figure>
       <figure><img src="${imgURL(base, c.png_long)}"><figcaption>heat glow, ${c.wavelength_long_um.toFixed(1)} µm</figcaption></figure>

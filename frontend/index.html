@@ -7,7 +7,7 @@
   <title>SkyShift — what moved through your patch of sky?</title>
   <meta name="description" content="Explore NASA SPHEREx images over time: moving stars, variable stars, and the satellites crossing the data, with their temperatures.">
   <link rel="stylesheet" href="style.css">
-  <script src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
+  
 </head>
 <body>
 <header>
@@ -40,7 +40,8 @@
     </div>
     <div class="modes">
       <div class="seg" id="modeSeg">
-        <button data-mode="stacks" class="on">Flipbook</button>
+        <button data-mode="color" class="on" title="Three infrared colours at once">Colour</button>
+        <button data-mode="stacks">One band</button>
         <button data-mode="diffs">Difference</button>
         <button data-mode="frames">All exposures</button>
       </div>
@@ -82,6 +83,12 @@
 <script>
   // Backend URL for live searches. Demo targets and the showcase work without it (static/).
   window.SKYSHIFT_API = window.SKYSHIFT_API || "http://localhost:8000";
+</script>
+<script type="module">
+  // Aladin Lite v3 (CDS, GPL-3.0), served from this site so the map does not depend on a CDN
+  import A from "./aladin.js";
+  window.A = A;
+  window.dispatchEvent(new Event("aladin-ready"));
 </script>
 <script src="app.js"></script>
 </body>

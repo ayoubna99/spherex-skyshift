@@ -323,7 +323,28 @@ def crop_png(exp, L, name, half=60):
     lo, hi = np.percentile(a, 2), np.percentile(a, 99.5)
     s = 0.05 * (hi - lo) if hi > lo else 1.0
     v = np.clip(np.arcsinh((a - lo) / s) / np.arcsinh((hi - lo) / s), 0, 1)
-    Image.fromarray((v[::-1] * 255).astype(np.uint8)).resize((240, 240), Image.NEAREST).save(IMG / name)
+    Image.fromarray((v[::-1] * 255).astype(np.uint8)).resize((360, 360), Image.BICUBIC).save(IMG / name)
+    return f"img/{name}"
+
+
+def full_png(short, long_, name, b=4):
+    """The whole exposure (3.5 deg), long camera in red, short in cyan: the streak across the sky."""
+    def chan(e):
+        a = np.nan_to_num(e.resid)
+        ny, nx = a.shape[0] // b * b, a.shape[1] // b * b
+        a = a[:ny, :nx].reshape(ny // b, b, nx // b, b).mean(axis=(1, 3))
+        lo, hi = np.percentile(a, 50), np.percentile(a, 99.7)
+        s = 0.05 * (hi - lo) or 1.0
+        return np.clip(np.arcsinh((a - lo) / s) / np.arcsinh((hi - lo) / s), 0, 1)
+    r, c = chan(long_), chan(short)
+    rgb = np.dstack([r, c * 0.85, c])
+    # the pixels SPHEREx flagged as satellite streak (either camera), drawn in orange
+    m = ((short.flags & STREAK) > 0) | ((long_.flags & STREAK) > 0)
+    ny, nx = m.shape[0] // b * b, m.shape[1] // b * b
+    m = m[:ny, :nx].reshape(ny // b, b, nx // b, b).any(axis=(1, 3))
+    rgb[m] = [1.0, 0.62, 0.2]
+    rgb = (rgb * 255).astype(np.uint8)[::-1]
+    Image.fromarray(rgb).save(IMG / name, optimize=True)
     return f"img/{name}"
 
 
@@ -347,7 +368,7 @@ def analyse(url, det):
     other = PAIR[det]
     s_det, l_det = min(det, other), max(det, other)
     urls = {det: url, other: partner_url(url, det, other)}
-    key = hashlib.md5(f"v3|{urls[s_det]}".encode()).hexdigest()[:12]
+    key = hashlib.md5(f"v4|{urls[s_det]}".encode()).hexdigest()[:12]
     cache = spherex.CACHE / f"streaks_{key}.json"
     if cache.exists():
         return frames.clean(json.loads(cache.read_text()))
@@ -422,6 +443,7 @@ def analyse(url, det):
                          for tag in ("short", "long") for s in res[tag]["segs"]],
             "png_short": crop_png(short, Ls, f"{sid}_short.png"),
             "png_long": crop_png(long_, res["long"]["L"], f"{sid}_long.png"),
+            "png_full": full_png(short, long_, f"{sid}_full.png"),
             "time_half_hint": None if frac_first is None else ("first" if frac_first > 0.5 else "second"),
             **_name_it(short.eph, [[float(ra[0]), float(dec[0])], [float(ra[1]), float(dec[1])]]),
         })

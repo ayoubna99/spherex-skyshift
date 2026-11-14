@@ -15,6 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+from scipy import ndimage
 from astropy import log as astropy_log
 from astropy.io import fits
 from astropy.time import Time
@@ -115,17 +116,57 @@ def _fill_holes(a, rounds=3):
     return a
 
 
-def _stretch(a, lo, hi):
+def _outside(a, min_px=40):
+    """Large NaN areas = outside the exposure (not small saturated holes)."""
+    lab, n = ndimage.label(np.isnan(a))
+    if not n:
+        return np.zeros(a.shape, bool)
+    sizes = ndimage.sum(np.ones_like(a), lab, index=np.arange(1, n + 1))
+    big = np.flatnonzero(sizes >= min_px) + 1
+    return np.isin(lab, big)
+
+
+def _stretch(a, lo, hi, soft=0.05):
+    out = _outside(a)
     a = np.nan_to_num(_fill_holes(a), nan=lo)
-    s = 0.05 * (hi - lo) if hi > lo else 1.0
+    a[out] = lo
+    s = soft * (hi - lo) if hi > lo else 1.0
     v = np.arcsinh((a - lo) / s) / np.arcsinh((hi - lo) / s)
     return (np.clip(v, 0, 1) * 255).astype(np.uint8)
 
 
+UPS = 6          # PNGs are upsampled smoothly (bicubic) so 6"-pixels don't look like blocks
+
+
+def _save(arr, name):
+    im = Image.fromarray(arr)
+    im.resize((im.width * UPS, im.height * UPS), Image.BICUBIC).save(IMG / name, optimize=True)
+    return f"img/{name}"
+
+
 def save_gray(a, lo, hi, name):
     # FITS row 0 is the bottom; flip so north is up in the PNG
-    Image.fromarray(_stretch(a, lo, hi)[::-1]).save(IMG / name)
-    return f"img/{name}"
+    return _save(_stretch(a, lo, hi)[::-1], name)
+
+
+# false colour: long infrared -> red, middle -> green, short -> blue (first available of each)
+COLOR_CHANNELS = ((6, 5, 4), (3, 2), (1, 2))
+
+
+def save_color(stack_arr, ep, limits, name):
+    chans = []
+    for options in COLOR_CHANNELS:
+        d = next((d for d in options if (ep, d) in stack_arr), None)
+        if d is None:
+            return None, None
+        a = stack_arr[(ep, d)]
+        f = np.nan_to_num(_fill_holes(a))
+        f = f - ndimage.median_filter(f, 13)                          # remove patchy background
+        sm = ndimage.gaussian_filter(f, 0.8)                          # tame pixel noise
+        sm[_outside(a)] = np.nan
+        chans.append((d, _stretch(sm, *limits[d], soft=0.015)))
+    rgb = np.dstack([c for _, c in chans])[::-1]
+    return _save(np.ascontiguousarray(rgb), name), [d for d, _ in chans]
 
 
 def save_diff(d, lim, name):
@@ -135,8 +176,7 @@ def save_diff(d, lim, name):
     rgb[..., 0] = (255 * pos).astype(np.uint8)                 # brighter now: orange
     rgb[..., 1] = (140 * pos + 120 * neg).astype(np.uint8)
     rgb[..., 2] = (255 * neg).astype(np.uint8)                 # brighter before: blue
-    Image.fromarray(rgb).save(IMG / name)
-    return f"img/{name}"
+    return _save(rgb, name)
 
 
 def clean(x):
@@ -151,7 +191,7 @@ def clean(x):
 
 
 def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name=None):
-    key = hashlib.md5(f"v5|{ra:.5f}|{dec:.5f}|{size_deg:.4f}|{per_epoch_det}|{dets}|{spherex.COLLECTIONS}"
+    key = hashlib.md5(f"v6|{ra:.5f}|{dec:.5f}|{size_deg:.4f}|{per_epoch_det}|{dets}|{spherex.COLLECTIONS}"
                       .encode()).hexdigest()[:12]
     cached = spherex.CACHE / f"result_{key}.json"
     if cached.exists():
@@ -202,11 +242,16 @@ def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name
     by = defaultdict(list)
     for f in frames:
         by[(f["epoch"], f["detector"])].append(f)
-    stack_arr = {}
+    stack_arr, stack_full = {}, {}     # stack_full: NaN where not every exposure covers (for colour)
     for (ep, d), fs in sorted(by.items()):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
-            s = np.nanmean([arrays[f["id"]] for f in fs], axis=0)
+            st = np.array([arrays[f["id"]] for f in fs])
+            # cosmic rays / hot pixels sit in one exposure only: min of 2, median of 3+
+            s = st[0] if len(st) == 1 else np.nanmin(st, axis=0) if len(st) == 2 else np.nanmedian(st, axis=0)
+            partial = (np.isfinite(st).sum(0) < len(st)) & np.isfinite(s)
+        big_partial = _outside(np.where(partial, np.nan, 0.0))   # ignore tiny holes, keep star cores
+        stack_full[(ep, d)] = np.where(big_partial, np.nan, s)
         stack_arr[(ep, d)] = s
         lo, hi = limits[d]
         mjd = float(np.mean([f["mjd"] for f in fs]))
@@ -216,6 +261,21 @@ def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name
             "png": save_gray(s, lo, hi, f"{key}_stack_e{ep}_d{d}.png"),
             "streak": any(f["flags"]["streak"] for f in fs),
         })
+    color = []
+    climits = {}                      # colour: background -> black, per detector
+    for d in dets:
+        vals = [(lambda f: f - ndimage.median_filter(f, 13))(np.nan_to_num(_fill_holes(v)))[np.isfinite(v)]
+                for (ep, dd), v in stack_full.items() if dd == d]
+        if vals:
+            allv = np.concatenate(vals)
+            climits[d] = (float(np.percentile(allv, 65)), float(np.percentile(allv, 99.3)))
+    for ep in sorted({ep for (ep, _) in stack_arr}):
+        png, used = save_color(stack_full, ep, climits, f"{key}_color_e{ep}.png")
+        if png:
+            sd = [s for s in stacks if s["epoch"] == ep]
+            color.append({"epoch": ep, "detectors": used, "png": png,
+                          "date": sd[0]["date"], "n_frames": sum(s["n_frames"] for s in sd),
+                          "streak": any(s["streak"] for s in sd)})
     for d in dets:
         eps = sorted(ep for (ep, dd) in stack_arr if dd == d)
         for a, b in zip(eps, eps[1:]):
@@ -229,7 +289,7 @@ def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name
         "target": {"name": name, "ra": round(ra, 6), "dec": round(dec, 6), "size_deg": size_deg,
                    "width_px": n},
         "n_images_found": len(rows), "n_epochs": n_epochs,
-        "frames": frames, "stacks": stacks, "diffs": diffs, "streaks": [],
+        "frames": frames, "stacks": stacks, "color": color, "diffs": diffs, "streaks": [],
     }
     result = clean(result)
     cached.write_text(json.dumps(result))

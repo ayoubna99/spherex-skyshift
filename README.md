@@ -73,9 +73,10 @@ Optional, for satellite names: download 3-line elements for the exposure dates f
 The file is not in this repository: Space-Track data may not be redistributed.
 
 Deploy: the backend runs on Render's free plan (build `pip install -r requirements.txt`, start
-`uvicorn backend.app:app --host 0.0.0.0 --port $PORT`). One streak analysis peaks around 350 MB
-without the orbit file, ~600 MB with it, so naming in the live API needs a bigger instance; the
-`Dockerfile` works on any container host. The frontend is plain static files; the demo targets and
+`uvicorn backend.app:app --host 0.0.0.0 --port $PORT`). Shrink the orbit file first
+(`python -m scripts.slim_tle big.txt slim.txt && gzip -9 slim.txt`), add it as a Render *secret
+file* and set `SKYSHIFT_TLE=/etc/secrets/<name>.txt.gz`; one streak analysis with naming then peaks
+around 420 MB. The `Dockerfile` works on any container host. The frontend is plain static files; the demo targets and
 showcase are pre-rendered in `frontend/static/` and need no backend.
 
 ## Data, tools and licenses
