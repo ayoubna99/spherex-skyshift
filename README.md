@@ -106,7 +106,9 @@ showcase are pre-rendered in `frontend/static/` and need no backend.
   Aeronautics and Space Administration."*
 - This research has made use of the NASA/IPAC Infrared Science Archive, which is funded by NASA and
   operated by the California Institute of Technology.
-- Sky map background: AllWISE colour HiPS (NASA WISE), served by CDS.
+- Sky map backgrounds, served by NASA/IPAC IRSA (no dependency on CDS Strasbourg): AllWISE colour HiPS
+  (NASA WISE) and the SPHEREx DR1 all-sky data cube HiPS (102 wavelength frames, 13″ pixels).
+- Gaia DR3 overlay: ESA Gaia Archive (TAP), relayed by the backend (`/api/gaia`) because the archive sends no CORS headers.
 
 **Other data**
 - Satellite orbits: Space-Track.org (US Space Force), used under its user agreement, not

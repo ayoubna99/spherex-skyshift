@@ -75,6 +75,27 @@ def get_streaks(
         raise HTTPException(503, str(e)) from e
 
 
+@app.get("/api/gaia")
+def gaia(ra: float = Query(...), dec: float = Query(...), radius_deg: float = Query(0.1, ge=0.01, le=0.5), limit: int = Query(1500, ge=1, le=5000)):
+    """Gaia DR3 sources around a position, from the ESA Gaia archive (TAP). The browser cannot call ESA
+    directly (no CORS), so the backend relays the query. Used for the sky-map overlay."""
+    import json
+    import urllib.parse
+    import urllib.request
+    adql = (f"SELECT TOP {limit} source_id, ra, dec, phot_g_mean_mag, pmra, pmdec, parallax "
+            f"FROM gaiadr3.gaia_source WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', {ra}, {dec}, {radius_deg})) "
+            f"ORDER BY phot_g_mean_mag")
+    url = "https://gea.esac.esa.int/tap-server/tap/sync?" + urllib.parse.urlencode(
+        {"REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "json", "QUERY": adql})
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=spherex.UA), timeout=60) as r:
+            d = json.loads(r.read())
+    except Exception as e:                           # noqa: BLE001
+        raise HTTPException(502, f"ESA Gaia archive not reachable: {e}")
+    cols = [c["name"] for c in d["metadata"]]
+    return {"source": "Gaia DR3, ESA Gaia Archive (gea.esac.esa.int)", "columns": cols, "rows": d["data"]}
+
+
 @app.get("/api/showcase")
 def showcase():
     """Pre-validated satellite streaks for the demo."""

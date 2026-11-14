@@ -218,9 +218,18 @@
     <aside class="side">
       <div id="aladin"></div>
       <div class="map-tools">
+        <div class="seg" id="baseSeg">
+          <button data-base="wise" class="on" title="AllWISE colour map (NASA WISE), served by NASA/IPAC">AllWISE</button>
+          <button data-base="spherex" title="SPHEREx's own all-sky map, one of 102 wavelengths at a time">SPHEREx all-sky</button>
+        </div>
         <label class="check"><input type="checkbox" id="gaiaToggle"> Gaia DR3 stars</label>
-        <span class="small">Where you are looking, on NASA's AllWISE sky. Box = the field above; red line = a measured streak.</span>
       </div>
+      <div class="band-slider" id="bandSlider" hidden>
+        <label>Wavelength <b id="bandLabel">3.12 µm</b><input id="bandRange" type="range" min="1" max="102" value="60" step="1" aria-label="SPHEREx band"></label>
+        <button type="button" class="btn small ghost" id="bandPlay">Sweep</button>
+        <span class="small">SPHEREx DR1 all-sky data cube (NASA/IPAC IRSA): the whole sky in 102 infrared colours. Move the slider and watch cool, dusty regions brighten toward 5 µm.</span>
+      </div>
+      <p class="small map-note" id="mapNote">Where you are looking. Box = the field above; red line = a measured streak.</p>
       <div id="cards"></div>
     </aside>
   </div>
@@ -252,7 +261,7 @@
     </div>
   </div>
   <div class="sources">
-    <p><strong>Data.</strong> SPHEREx Level 2 spectral images, DR1 and Quick Release 3, from the NASA/IPAC Infrared Science Archive (IRSA), via the SIA2 and cutout services. Sky-map background: AllWISE (NASA WISE) served by CDS. Satellite orbits: Space-Track.org, under its user agreement, not redistributed.</p>
+    <p><strong>Data.</strong> SPHEREx Level 2 spectral images, DR1 and Quick Release 3, from the NASA/IPAC Infrared Science Archive (IRSA), via the SIA2 and cutout services. Sky-map backgrounds, both served by NASA/IPAC IRSA: the AllWISE colour map (NASA WISE) and the SPHEREx DR1 all-sky data cube (102 bands). Gaia DR3 from the ESA Gaia Archive. Satellite orbits: Space-Track.org, under its user agreement, not redistributed.</p>
     <p><strong>Software.</strong> Aladin Lite v3 (CDS, GPL-3.0); Astropy, reproject, NumPy, SciPy (BSD-3); FastAPI, Uvicorn, sgp4, Skyfield (MIT); Pillow (MIT-CMU). Our code: MIT.</p>
     <p><strong>References.</strong> Akeson et al. 2025, the SPHEREx processing pipeline, and the SPHEREx Explanatory Supplement. Borlaff et al. 2026 (arXiv:2605.27501), satellite trails in SPHEREx exposures and the ~280 K thermal prediction.</p>
     <p><strong>AI.</strong> We used AI tools to help with coding and research. No image is AI-generated.</p>

@@ -378,15 +378,52 @@ function syncURL() {
 }
 
 // ---- sky map
+// Base layers, both served by NASA/IPAC IRSA (no dependency on CDS Strasbourg):
+//  - AllWISE colour HiPS (mirror of the CDS product)
+//  - SPHEREx DR1 all-sky data cube: 102 frames, one per band/channel; frames 50 and 51 (dichroic edges) are blank.
+const HIPS_WISE = "https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1";
+const HIPS_SPHEREX = "https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube";
+const SPHEREX_UM = [0.753,0.771,0.790,0.809,0.828,0.848,0.868,0.889,0.910,0.932,0.955,0.978,1.001,1.025,1.050,1.075,1.102,1.113,1.139,1.167,1.195,1.224,1.254,1.284,1.315,1.346,1.378,1.412,1.446,1.481,1.517,1.554,1.592,1.631,1.656,1.695,1.735,1.775,1.818,1.861,1.905,1.949,1.995,2.041,2.089,2.139,2.189,2.240,2.292,2.345,2.399,2.445,2.506,2.575,2.646,2.719,2.794,2.871,2.951,3.033,3.118,3.204,3.293,3.383,3.476,3.570,3.667,3.768,3.833,3.867,3.901,3.935,3.970,4.005,4.040,4.076,4.112,4.148,4.184,4.220,4.257,4.294,4.331,4.368,4.405,4.435,4.467,4.500,4.533,4.566,4.600,4.635,4.669,4.704,4.739,4.773,4.808,4.843,4.879,4.915,4.951,4.988];
+function setBase(which) {
+  if (!S.aladin) { S.pendingBase = which; return; }
+  [...$("baseSeg").children].forEach((b) => b.classList.toggle("on", b.dataset.base === which));
+  $("bandSlider").hidden = which !== "spherex";
+  if (which === "spherex") {
+    if (!S.cube) S.cube = A.imageHiPS(HIPS_SPHEREX, { name: "SPHEREx DR1 all-sky cube", imgFormat: "png", maxOrder: 5 });
+    S.aladin.setBaseImageLayer(S.cube);
+    // the slice can only be set once the layer has loaded its properties; the default middle slice (50) is blank
+    [100, 1500, 4000].forEach((ms) => setTimeout(() => $("bandSlider").hidden || setBand(+$("bandRange").value), ms));
+    $("mapNote").textContent = "SPHEREx's own all-sky map at one wavelength. Coarser than the cutouts above (about 13″ per pixel) but it is the whole sky, in every band.";
+  } else {
+    stopSweep();
+    if (!S.wise) S.wise = A.imageHiPS(HIPS_WISE, { name: "AllWISE colour" });
+    S.aladin.setBaseImageLayer(S.wise);
+    $("mapNote").textContent = "Where you are looking, on NASA's AllWISE sky. Box = the field above; red line = a measured streak.";
+  }
+}
+function setBand(n) {
+  if (n === 50 || n === 51) n = n === 50 ? 49 : 52;          // blank dichroic frames
+  $("bandRange").value = n; $("bandLabel").textContent = SPHEREX_UM[n - 1].toFixed(2) + " µm";
+  try { S.cube && S.cube.setSliceNumber(n); } catch (e) { /* older Aladin Lite without cube support */ }
+}
+function stopSweep() { clearInterval(S.sweep); S.sweep = null; $("bandPlay").textContent = "Sweep"; }
+$("baseSeg").onclick = (e) => { if (e.target.dataset.base) setBase(e.target.dataset.base); };
+$("bandRange").oninput = (e) => { stopSweep(); setBand(+e.target.value); };
+$("bandPlay").onclick = () => {
+  if (S.sweep) return stopSweep();
+  $("bandPlay").textContent = "Stop";
+  S.sweep = setInterval(() => { let n = +$("bandRange").value + 1; if (n > 102) n = 1; setBand(n); }, 350);
+};
 function initAladin() {
   if (!window.A || S.aladinStarted) return;
   S.aladinStarted = true;
   A.init.then(() => {
-    S.aladin = A.aladin("#aladin", { survey: "P/allWISE/color", fov: 0.5, showReticle: true, showLayersControl: false, showGotoControl: false, showFullscreenControl: false, showFrame: false, showCooGrid: false });
+    S.aladin = A.aladin("#aladin", { survey: HIPS_WISE, fov: 0.5, showReticle: true, showLayersControl: false, showGotoControl: false, showFullscreenControl: false, showFrame: false, showCooGrid: false });
     S.overlay = A.graphicOverlay({ color: HOT, lineWidth: 2 });
     S.aladin.addOverlay(S.overlay);
+    if (S.pendingBase) setBase(S.pendingBase);
     if (S.pendingMap) S.pendingMap();
-  }).catch(() => { $("aladin").hidden = true; });
+  }).catch(() => { $("aladin").hidden = true; $("bandSlider").hidden = true; $("baseSeg").hidden = true; });
 }
 window.addEventListener("aladin-ready", initAladin);
 function mapGoto(ra, dec, fovDeg) {
@@ -580,16 +617,26 @@ $("geoBtn").onclick = () => {
     { timeout: 8000 });
 };
 
-// ---- Gaia DR3 overlay on the sky map (CDS VizieR, fetched by Aladin Lite in the browser)
-$("gaiaToggle").onchange = (e) => {
+// ---- Gaia DR3 overlay on the sky map (ESA Gaia archive, relayed by the backend; CDS-independent)
+$("gaiaToggle").onchange = async (e) => {
   if (!S.aladin) return;
   if (S.gaia) { S.aladin.removeLayer(S.gaia); S.gaia = null; }
-  if (e.target.checked && S.data) {
-    try {
-      S.gaia = A.catalogFromVizieR("I/355/gaiadr3", `${S.data.target.ra} ${S.data.target.dec}`, Math.max(S.data.target.size_deg, 0.1),
-        { name: "Gaia DR3", color: COLD, shape: "circle", sourceSize: 10, onClick: "showPopup", limit: 2000 });
-      S.aladin.addCatalog(S.gaia);
-    } catch (err) { status("Gaia overlay failed: " + err.message); e.target.checked = false; }
+  if (!e.target.checked || !S.data) return;
+  status("Fetching Gaia DR3 from the ESA archive…", true);
+  try {
+    const t = S.data.target;
+    const g = await fetchJSON(`${API}/api/gaia?ra=${t.ra}&dec=${t.dec}&radius_deg=${Math.max(t.size_deg, 0.1).toFixed(3)}&limit=400`, API);
+    const col = Object.fromEntries(g.columns.map((c, i) => [c, i]));
+    S.gaia = A.catalog({ name: "Gaia DR3", color: COLD, shape: "circle", sourceSize: 8, onClick: "showPopup" });
+    S.gaia.addSources(g.rows.map((r) => A.source(r[col.ra], r[col.dec], {
+      "Gaia DR3": String(r[col.source_id]), "G mag": r[col.phot_g_mean_mag]?.toFixed(2),
+      "pm RA (mas/yr)": r[col.pmra]?.toFixed(1), "pm Dec (mas/yr)": r[col.pmdec]?.toFixed(1), "parallax (mas)": r[col.parallax]?.toFixed(2),
+    })));
+    S.aladin.addCatalog(S.gaia);
+    status(`${g.rows.length} Gaia DR3 stars drawn (ESA archive).`);
+  } catch (err) {
+    status(offline(err) ? "Gaia needs the live server, which is not reachable right now." : "Gaia overlay failed: " + err.message);
+    e.target.checked = false;
   }
 };
 
