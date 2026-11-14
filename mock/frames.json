@@ -1,0 +1,116 @@
+{
+  "mock": true,
+  "release": "QR3",
+  "target": {
+    "name": "Barnard's Star",
+    "ra": 269.452,
+    "dec": 4.693,
+    "size_deg": 0.34
+  },
+  "frames": [
+    {
+      "id": "mock_2025W20_0001_D3",
+      "obs_id": "mock_2025W20_0001",
+      "detector": 3,
+      "date": "2025-05-20T10:00:00Z",
+      "wavelength_um": 2.05,
+      "png": "mock/img/mock_2025W20_0001_D3.png",
+      "width_px": 200,
+      "height_px": 200,
+      "pixel_scale_arcsec": 6.15,
+      "flags": {
+        "streak": false,
+        "transient_px": 0
+      }
+    },
+    {
+      "id": "mock_2025W46_0002_D3",
+      "obs_id": "mock_2025W46_0002",
+      "detector": 3,
+      "date": "2025-11-14T10:00:00Z",
+      "wavelength_um": 2.07,
+      "png": "mock/img/mock_2025W46_0002_D3.png",
+      "width_px": 200,
+      "height_px": 200,
+      "pixel_scale_arcsec": 6.15,
+      "flags": {
+        "streak": false,
+        "transient_px": 0
+      }
+    },
+    {
+      "id": "mock_2026W20_0003_D3",
+      "obs_id": "mock_2026W20_0003",
+      "detector": 3,
+      "date": "2026-05-19T10:00:00Z",
+      "wavelength_um": 2.04,
+      "png": "mock/img/mock_2026W20_0003_D3.png",
+      "width_px": 200,
+      "height_px": 200,
+      "pixel_scale_arcsec": 6.15,
+      "flags": {
+        "streak": false,
+        "transient_px": 0
+      }
+    },
+    {
+      "id": "mock_2026W34_0004_D3",
+      "obs_id": "mock_2026W34_0004",
+      "detector": 3,
+      "date": "2026-08-18T04:33:47Z",
+      "wavelength_um": 2.06,
+      "png": "mock/img/mock_2026W34_0004_D3.png",
+      "width_px": 200,
+      "height_px": 200,
+      "pixel_scale_arcsec": 6.15,
+      "flags": {
+        "streak": true,
+        "transient_px": 312
+      }
+    }
+  ],
+  "streaks": [
+    {
+      "id": "s1",
+      "frame_id": "mock_2026W34_0004_D3",
+      "partner_frame_id": "mock_2026W34_0004_D6",
+      "line_px": [
+        [
+          10,
+          20
+        ],
+        [
+          190,
+          170
+        ]
+      ],
+      "time_half": "first",
+      "temp_k": 270,
+      "temp_range_k": [
+        250,
+        300
+      ],
+      "ratio_long_short": 60,
+      "ratio_stars": 0.24,
+      "satellite": null,
+      "distance_km": null,
+      "spectrum": [
+        {
+          "um": 4.45,
+          "value": 12.0,
+          "err": 1.0
+        },
+        {
+          "um": 4.65,
+          "value": 16.0,
+          "err": 1.0
+        },
+        {
+          "um": 4.85,
+          "value": 21.0,
+          "err": 1.2
+        }
+      ]
+    }
+  ]
+}

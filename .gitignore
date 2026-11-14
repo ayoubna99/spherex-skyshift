@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Data (never commit raw downloads)
+data/
+cache/
+*.fits
+*.fits.gz
+
+# Space-Track orbit data may not be redistributed
+orbits*.txt
+*.tle
+*.3le
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Node (if used)
+node_modules/
