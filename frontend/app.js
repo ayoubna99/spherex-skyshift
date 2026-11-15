@@ -432,7 +432,7 @@ function setBase(which) {
     stopSweep();
     if (!S.wise) S.wise = A.imageHiPS(HIPS_WISE, { name: "AllWISE colour" });
     S.aladin.setBaseImageLayer(S.wise);
-    $("mapNote").textContent = "Where you are looking, on NASA's AllWISE sky. Box = the field above; red line = a measured streak.";
+    $("mapNote").textContent = "Drag the map to explore; click “Load SPHEREx images here” to see that spot over time. Box = the field above; red line = a measured streak.";
   }
 }
 function setBand(n) {
@@ -460,9 +460,32 @@ function initAladin() {
     S.aladin.addOverlay(S.overlay);
     if (S.pendingBase) setBase(S.pendingBase);
     if (S.pendingMap) S.pendingMap();
+    // Drag the map, put the centre crosshair on something, click: load SPHEREx images of that spot.
+    S.aladin.on("positionChanged", () => { clearTimeout(S.mapT); S.mapT = setTimeout(updateMapLoad, 150); });
   }).catch(() => { $("aladin").hidden = true; $("bandSlider").hidden = true; $("baseSeg").hidden = true; });
 }
 window.addEventListener("aladin-ready", initAladin);
+function mapCentre() {
+  const [ra, dec] = S.aladin.getRaDec();
+  return [+(((ra % 360) + 360) % 360).toFixed(5), +dec.toFixed(5)];
+}
+function updateMapLoad() {
+  if (!S.aladin) return;
+  const [ra, dec] = mapCentre();
+  const cur = S.data ? S.data.target : (S.view && S.view.ra != null ? S.view : null);
+  let far = true;
+  if (cur) {
+    const dra = ((ra - cur.ra + 540) % 360 - 180) * Math.cos(dec * Math.PI / 180);
+    far = Math.hypot(dra, dec - cur.dec) > 0.02;                 // more than about 1 arcminute away
+  }
+  $("mapLoadBtn").hidden = !far;
+  $("mapLoadPos").textContent = `RA ${ra.toFixed(3)}°, Dec ${dec.toFixed(3)}°` + (nearReady(ra, dec) ? " · ready-made view" : "");
+}
+$("mapLoadBtn").onclick = () => {
+  const [ra, dec] = mapCentre();
+  $("mapLoadBtn").hidden = true;
+  loadView({ ra, dec, fov: +$("fov").value });
+};
 function mapGoto(ra, dec, fovDeg) {
   if (!S.aladin) { S.pendingMap = () => mapGoto(ra, dec, fovDeg); return; }
   S.aladin.gotoRaDec(ra, dec); S.aladin.setFoV(Math.max(fovDeg * 3, 0.3));

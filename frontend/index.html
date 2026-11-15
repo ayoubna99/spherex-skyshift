@@ -216,7 +216,12 @@
     </div>
 
     <aside class="side">
-      <div id="aladin"></div>
+      <div class="map-wrap">
+        <div id="aladin"></div>
+        <button type="button" id="mapLoadBtn" class="map-load" hidden>
+          <b>Load SPHEREx images here</b><span id="mapLoadPos"></span>
+        </button>
+      </div>
       <div class="map-tools">
         <div class="seg" id="baseSeg">
           <button data-base="wise" class="on" title="AllWISE colour map (NASA WISE), served by NASA/IPAC">AllWISE</button>
@@ -229,7 +234,7 @@
         <button type="button" class="btn small ghost" id="bandPlay">Sweep</button>
         <span class="small">SPHEREx DR1 all-sky data cube (NASA/IPAC IRSA): the whole sky in 102 infrared colours. Move the slider and watch cool, dusty regions brighten toward 5 µm.</span>
       </div>
-      <p class="small map-note" id="mapNote">Where you are looking. Box = the field above; red line = a measured streak.</p>
+      <p class="small map-note" id="mapNote">Drag the map to explore; click “Load SPHEREx images here” to see that spot over time. Box = the field above; red line = a measured streak.</p>
       <div id="cards"></div>
     </aside>
   </div>
