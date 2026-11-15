@@ -4,7 +4,10 @@ Run locally:  uvicorn backend.app:app --reload   (from the repo root)
 """
 import json
 import os
+import subprocess
+import sys
 import threading
+from pathlib import Path
 import time
 
 from fastapi import FastAPI, HTTPException, Query
@@ -31,7 +34,22 @@ JOBS.mkdir(parents=True, exist_ok=True)
 STALE_S = 900
 
 
-def deferred(key, path, fn):
+def _python():
+    """The interpreter for job processes. Under LiteSpeed/Passenger sys.executable can be the web
+    server's own launcher rather than Python, so prefer the virtualenv's python3."""
+    exe = sys.executable or ""
+    if os.path.basename(exe).startswith("python"):
+        return exe
+    for cand in (os.path.join(sys.prefix, "bin", "python3"), os.path.join(sys.prefix, "bin", "python")):
+        if os.path.exists(cand):
+            return cand
+    return None
+
+
+PYTHON = _python()
+
+
+def deferred(key, path, fn, job_args=None):
     if path.exists():
         return frames.clean(json.loads(path.read_text()))
     run, err = JOBS / f"{key}.run", JOBS / f"{key}.err"
@@ -51,6 +69,16 @@ def deferred(key, path, fn):
         finally:
             run.unlink(missing_ok=True)
 
+    # Preferred: a detached process, which survives the host freezing or recycling this web worker.
+    # Fallback: a thread in this process.
+    if job_args and PYTHON:
+        try:
+            subprocess.Popen([PYTHON, "-m", "backend.job", job_args[0], key, *map(str, job_args[1:])],
+                             cwd=str(Path(__file__).resolve().parent.parent), start_new_session=True,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return JSONResponse({"pending": True, "since_s": 0}, 202)
+        except Exception:                           # noqa: BLE001
+            pass
     threading.Thread(target=work, daemon=True).start()
     return JSONResponse({"pending": True, "since_s": 0}, 202)
 
@@ -86,7 +114,8 @@ def get_frames(
     if ra is None or dec is None:
         raise HTTPException(400, "give ra and dec (degrees) or a target")
     key, path = frames.result_path(ra, dec, size_deg, per_epoch)
-    return deferred(key, path, lambda: frames.build(ra, dec, size_deg=size_deg, per_epoch_det=per_epoch, name=name))
+    return deferred(key, path, lambda: frames.build(ra, dec, size_deg=size_deg, per_epoch_det=per_epoch, name=name),
+                    job_args=["frames", ra, dec, size_deg, per_epoch, name or ""])
 
 
 IRSA_PREFIX = "https://irsa.ipac.caltech.edu/ibe/data/spherex/"
@@ -107,7 +136,7 @@ def get_streaks(
     if not url.startswith(IRSA_PREFIX) or not url.endswith(".fits"):
         raise HTTPException(400, "url must be a SPHEREx image URL from IRSA")
     key, path = streaks.result_path(url, det)
-    return deferred(key, path, lambda: streaks.analyse(url, det))
+    return deferred(key, path, lambda: streaks.analyse(url, det), job_args=["streaks", url, det])
 
 
 @app.get("/api/gaia")
