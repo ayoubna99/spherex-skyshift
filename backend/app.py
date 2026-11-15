@@ -51,7 +51,11 @@ PYTHON = _python()
 
 def deferred(key, path, fn, job_args=None):
     if path.exists():
-        return frames.clean(json.loads(path.read_text()))
+        d = json.loads(path.read_text())
+        # a result built while part of the archive was down is kept for an hour, then rebuilt in full
+        if not (isinstance(d, dict) and d.get("partial") and time.time() - path.stat().st_mtime > 3600):
+            return frames.clean(d)
+        path.unlink(missing_ok=True)
     run, err = JOBS / f"{key}.run", JOBS / f"{key}.err"
     if err.exists():
         msg = err.read_text()

@@ -492,7 +492,7 @@ async function loadView(v) {
     if (S.mode === "color" && !(d.color || []).length) S.mode = "stacks";
     $("title").textContent = `${d.target.name || "Custom position"} — ${d.n_epochs} sky passes, ${d.frames.length} exposures`;
     $("ra").value = d.target.ra; $("dec").value = d.target.dec;
-    status(`RA ${d.target.ra.toFixed(4)}°, Dec ${d.target.dec.toFixed(4)}°, field ${(d.target.size_deg * 60).toFixed(1)}′`);
+    status(`RA ${d.target.ra.toFixed(4)}°, Dec ${d.target.dec.toFixed(4)}°, field ${(d.target.size_deg * 60).toFixed(1)}′` + (d.note ? ` — ${d.note}` : ""));
     mapGoto(d.target.ra, d.target.dec, d.target.size_deg);
     buildDetButtons(); rebuildList(); show(0); syncURL();
     if ($("gaiaToggle").checked) $("gaiaToggle").onchange({ target: $("gaiaToggle") });

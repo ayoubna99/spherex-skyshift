@@ -288,8 +288,12 @@ def build(ra, dec, size_deg=0.12, per_epoch_det=2, dets=(1, 2, 3, 4, 5, 6), name
             diffs.append({"detector": d, "from_epoch": a, "to_epoch": b,
                           "png": save_diff(diff, lim, f"{key}_diff_e{a}e{b}_d{d}.png")})
 
+    skipped = dict(spherex.SKIPPED)
     result = {
-        "release": spherex.COLLECTIONS,
+        "release": [c for c in spherex.COLLECTIONS if c not in skipped],
+        "partial": bool(skipped),
+        "note": ("Some SPHEREx data could not be reached just now (" + ", ".join(skipped) + "); showing the rest. "
+                 "Load this view again later for every pass.") if skipped else None,
         "target": {"name": name, "ra": round(ra, 6), "dec": round(dec, 6), "size_deg": size_deg,
                    "width_px": n},
         "n_images_found": len(rows), "n_epochs": n_epochs,
