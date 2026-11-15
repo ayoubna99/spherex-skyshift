@@ -498,7 +498,10 @@ async function loadView(v) {
     if ($("gaiaToggle").checked) $("gaiaToggle").onchange({ target: $("gaiaToggle") });
     if (!REDUCED) play();
   } catch (e) {
-    const msg = offline(e) ? "The live server is not reachable right now (it may be waking up). Try again in a minute, or pick one of the ready-made targets." : "Something went wrong: " + e.message;
+    const irsa = /IRSA|archive|502|503|Proxy Error/i.test(e.message || "");
+    const msg = offline(e) ? "The live server is not reachable right now (it may be waking up). Try again in a minute, or pick one of the ready-made targets."
+      : irsa ? "NASA's SPHEREx archive (IRSA, at Caltech) is not answering right now, so a new patch of sky can't be fetched. This is on NASA's side; try again in a few minutes. The five targets above are stored on this site and always work."
+      : "Something went wrong: " + e.message;
     $("title").textContent = "Could not load"; status(""); $("empty").textContent = msg;
   }
 }
