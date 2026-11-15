@@ -18,11 +18,25 @@ const fmtDate = (s) => (s ? s.slice(0, 10) : "");
 const COLD = "#6cc0ff", HOT = "#ffb35c", MUTED = "#8b96ad";
 
 // ---------------------------------------------------------------- data access
+// Positions of the ready-made views. Coordinates typed within 3 arcminutes of one of them (for example
+// the challenge's own coordinates for WISE 0855) open the ready-made view at once instead of a new job.
+const READY = { "barnard": [269.446214, 4.769042], "eps-indi-b": [331.096863, -56.801278], "wise-0855": [133.767072, -7.242742],
+                "rw-aur": [76.956375, 30.401194], "r-dra": [248.1675, 66.7551] };
+function nearReady(ra, dec) {
+  for (const [k, [r0, d0]] of Object.entries(READY)) {
+    const dra = ((ra - r0 + 540) % 360 - 180) * Math.cos(d0 * Math.PI / 180), dd = dec - d0;
+    if (Math.hypot(dra, dd) < 0.05) return k;
+  }
+  return null;
+}
 function staticPath(path) {
   if (path === "/api/targets") return "static/targets.json";
   if (path === "/api/showcase") return "static/showcase.json";
   const m = path.match(/^\/api\/frames\?target=([\w-]+)$/);
-  return m ? `static/frames_${m[1]}.json` : null;
+  if (m) return `static/frames_${m[1]}.json`;
+  const c = path.match(/^\/api\/frames\?ra=([-\d.]+)&dec=([-\d.]+)&size_deg=([\d.]+)$/);
+  if (c && +c[3] <= 0.15) { const k = nearReady(+c[1], +c[2]); if (k) return `static/frames_${k}.json`; }
+  return null;
 }
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 async function fetchJSON(url, base) {
