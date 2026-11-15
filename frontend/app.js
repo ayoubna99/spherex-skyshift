@@ -26,19 +26,28 @@ function staticPath(path) {
 }
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 async function fetchJSON(url, base) {
-  // long jobs answer 202 {pending} and run on the server; ask again until the result is ready
-  let r, tries = 0;
+  // Long jobs answer 202 {pending} and run on the server; ask again until the result is ready.
+  // The shared host sometimes answers rapid repeat requests with an HTML "One moment, please" page
+  // instead of JSON; treat that like "still working" and back off, rather than failing.
+  let r, d, tries = 0;
+  const t0 = Date.now();
   for (;;) {
     try { r = await fetch(url); }
-    catch (e) { if (base !== "static" && tries++ < 4) { await sleep(5000); continue; } throw e; }
-    if (r.status !== 202) break;
-    const p = await r.json().catch(() => ({}));
-    if (typeof S !== "undefined" && S.onPending) S.onPending(p.since_s || 0);
-    if (tries++ > 120) throw new Error("the server is still working on this; try again in a minute");
-    await sleep(4000);
+    catch (e) { if (base !== "static" && tries++ < 6) { await sleep(8000); continue; } throw e; }
+    const isJSON = (r.headers.get("content-type") || "").includes("json");
+    if (r.status === 202 || (base !== "static" && r.ok && !isJSON)) {
+      const p = isJSON ? await r.json().catch(() => ({})) : {};
+      const waited = Math.round((Date.now() - t0) / 1000);
+      if (typeof S !== "undefined" && S.onPending) S.onPending(Math.max(p.since_s || 0, waited));
+      if (waited > 900) throw new Error("the server is still working on this position; try again in a few minutes");
+      tries++;
+      await sleep(isJSON ? 8000 : 15000);
+      continue;
+    }
+    break;
   }
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
-  const d = await r.json();
+  d = await r.json();
   (Array.isArray(d) ? d : [d]).forEach((x) => { if (x && typeof x === "object") x._base = base; });
   return d;
 }
@@ -461,7 +470,7 @@ async function loadView(v) {
   const q = v.target ? `target=${v.target}` : `ra=${v.ra}&dec=${v.dec}&size_deg=${v.fov}`;
   $("title").textContent = "Loading…"; $("empty").hidden = false; $("empty").textContent = "Fetching SPHEREx images from NASA…";
   status("A new position takes 1–3 minutes the first time; after that it is instant.", true);
-  S.onPending = (t) => { $("empty").textContent = `Fetching SPHEREx images from NASA… ${t} s (usually about a minute)`; };
+  S.onPending = (t) => { $("empty").textContent = `Fetching every SPHEREx exposure of this spot from NASA… ${t} s. A new position takes a few minutes on our small server; the five targets above are instant.`; };
   document.querySelector(".explore-grid").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "start" });
   try {
     const d = await api("/api/frames?" + q);
