@@ -131,7 +131,7 @@ showcase are pre-rendered in `frontend/static/` and need no backend.
 
 ## Use of AI
 
-We used AI tools to help with coding and research. No image on the site is AI-generated; every image is SPHEREx data.
+We used AI tools to help with coding and research.
 
 ## Team
 

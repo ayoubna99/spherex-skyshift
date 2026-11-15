@@ -65,7 +65,7 @@ fast even if the archive is busy.
 
 ## Use of artificial intelligence
 
-We used AI tools to help with coding and research. No image on the site is AI-generated; every image is SPHEREx data.
+We used AI tools to help with coding and research.
 
 ## NASA data
 
